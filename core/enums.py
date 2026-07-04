@@ -39,3 +39,8 @@ STATUS_LABELS_RU: dict[Status, str] = {
     Status.COMPLETED: "Просмотрено",
     Status.DROPPED: "Заброшено",
 }
+
+ENTRY_TYPE_LABELS_RU: dict[EntryType, str] = {
+    EntryType.MOVIE: "Фильм",
+    EntryType.SERIES: "Сериал",
+}

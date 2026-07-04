@@ -28,6 +28,8 @@ class EntryService:
                 original_title=data.original_title,
                 status=data.status,
                 rating=data.rating,
+                rating_other=data.rating_other,
+                year=data.year,
                 url=data.url,
                 description=data.description,
                 comment=data.comment,
@@ -43,6 +45,16 @@ class EntryService:
     def quick_add(self, title: str) -> EntryRead:
         """Быстрое добавление: только название."""
         return self.create(EntryCreate(title=title, type=EntryType.MOVIE))
+
+    def find_duplicate(
+        self, *, title: str, entry_type: EntryType, url: str | None
+    ) -> EntryRead | None:
+        """Check whether an entry matching this url (or title+type) already exists."""
+        with self._session_factory() as session:
+            entry = EntryRepository(session).find_duplicate(
+                url=url, title=title, entry_type=entry_type
+            )
+            return EntryRead.model_validate(entry) if entry else None
 
     # -- read -----------------------------------------------------------------
     def get(self, entry_id: int) -> EntryRead | None:

@@ -30,6 +30,8 @@ class Entry(Base):
         SAEnum(Status), default=Status.PLANNED, index=True
     )
     rating: Mapped[int | None] = mapped_column(Integer, default=None)  # 0..10
+    rating_other: Mapped[int | None] = mapped_column(Integer, default=None)  # 0..10
+    year: Mapped[int | None] = mapped_column(Integer, default=None)
     url: Mapped[str | None] = mapped_column(String(2000), default=None)
     description: Mapped[str | None] = mapped_column(Text, default=None)
     comment: Mapped[str | None] = mapped_column(Text, default=None)
