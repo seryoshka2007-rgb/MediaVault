@@ -22,6 +22,7 @@ config/settings.json
 build/
 dist/
 *.spec
+!mediavault.spec
 
 # Local Claude Code settings
 .claude/settings.local.json

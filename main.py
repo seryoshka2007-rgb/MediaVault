@@ -12,6 +12,7 @@ from config.settings import load_settings
 from core.services.backup_service import BackupService
 from core.services.entry_service import EntryService
 from core.utils.logging_setup import setup_logging
+from core.utils.paths import resource_root
 from database.engine import make_engine, make_session_factory
 from database.init import init_database
 
@@ -36,6 +37,7 @@ def bootstrap() -> EntryService:
 def main() -> int:
     service = bootstrap()
     try:
+        from PySide6.QtGui import QIcon
         from PySide6.QtWidgets import QApplication
 
         from app.theme.manager import load_theme
@@ -49,6 +51,7 @@ def main() -> int:
 
     app = QApplication(sys.argv)
     app.setStyleSheet(load_theme("neon_dark"))
+    app.setWindowIcon(QIcon(str(resource_root() / "resources" / "icon.ico")))
     window = MainWindow(service)
     window.show()
     return app.exec()
