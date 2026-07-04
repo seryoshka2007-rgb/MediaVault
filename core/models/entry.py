@@ -33,6 +33,7 @@ class Entry(Base):
     rating_other: Mapped[int | None] = mapped_column(Integer, default=None)  # 0..10
     year: Mapped[int | None] = mapped_column(Integer, default=None)
     url: Mapped[str | None] = mapped_column(String(2000), default=None)
+    open_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     description: Mapped[str | None] = mapped_column(Text, default=None)
     comment: Mapped[str | None] = mapped_column(Text, default=None)
     is_favorite: Mapped[bool] = mapped_column(Boolean, default=False, index=True)

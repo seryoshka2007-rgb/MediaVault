@@ -27,7 +27,7 @@ def _existing_entry() -> EntryRead:
     return EntryRead(
         id=1, type=EntryType.SERIES, title="Breaking Bad", original_title=None,
         status=Status.WATCHING, rating=9, rating_other=None, year=2008, url=None,
-        description=None, comment=None, is_favorite=True, season=2, episode=5,
+        open_count=3, description=None, comment=None, is_favorite=True, season=2, episode=5,
         last_watched_at=None, created_at=now, updated_at=now,
     )
 

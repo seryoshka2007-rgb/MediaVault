@@ -69,6 +69,7 @@ class EntryRead(BaseModel):
     rating_other: int | None
     year: int | None
     url: str | None
+    open_count: int
     description: str | None
     comment: str | None
     is_favorite: bool

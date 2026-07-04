@@ -1,7 +1,8 @@
 """Main window. Talks ONLY to services — never to repositories/ORM/SQLite."""
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QUrl
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QInputDialog,
@@ -42,12 +43,15 @@ class MainWindow(QMainWindow):
         self._search.textChanged.connect(self._on_search)
         add_btn = QPushButton("Добавить")
         add_btn.clicked.connect(self._on_add)
+        watch_btn = QPushButton("Смотреть")
+        watch_btn.clicked.connect(self._on_watch)
         edit_btn = QPushButton("Изменить")
         edit_btn.clicked.connect(self._on_edit)
         delete_btn = QPushButton("Удалить")
         delete_btn.clicked.connect(self._on_delete)
         top.addWidget(self._search)
         top.addWidget(add_btn)
+        top.addWidget(watch_btn)
         top.addWidget(edit_btn)
         top.addWidget(delete_btn)
 
@@ -104,6 +108,20 @@ class MainWindow(QMainWindow):
         self._service.create(data)
         self._reload()
 
+    def _on_watch(self) -> None:
+        entry_id = self._selected_entry_id()
+        if entry_id is None:
+            return
+        entry = self._service.get(entry_id)
+        if entry is None:
+            return
+        if not entry.url or not is_valid_url(entry.url):
+            QMessageBox.information(self, "Нет ссылки", "У этой записи нет корректной ссылки.")
+            return
+        QDesktopServices.openUrl(QUrl(entry.url))
+        self._service.mark_opened(entry_id)
+        self._reload()
+
     def _on_edit(self) -> None:
         entry_id = self._selected_entry_id()
         if entry_id is None:
@@ -137,6 +155,7 @@ class MainWindow(QMainWindow):
         for e in entries:
             fav = "★ " if e.is_favorite else ""
             year = f" ({e.year})" if e.year is not None else ""
+            opens = f"  ▶{e.open_count}" if e.open_count else ""
             status = STATUS_LABELS_RU[e.status]
             ratings = []
             if e.rating is not None:
@@ -144,6 +163,6 @@ class MainWindow(QMainWindow):
             if e.rating_other is not None:
                 ratings.append(f"др.ПК: {e.rating_other}")
             rating_str = f"  [{', '.join(ratings)}]" if ratings else ""
-            item = QListWidgetItem(f"{fav}{e.title}{year}  —  {status}{rating_str}")
+            item = QListWidgetItem(f"{fav}{e.title}{year}{opens}  —  {status}{rating_str}")
             item.setData(_ENTRY_ID_ROLE, e.id)
             self._list.addItem(item)

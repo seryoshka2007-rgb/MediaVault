@@ -101,6 +101,17 @@ class EntryService:
             log.info("Deleted entry id=%s", entry_id)
             return True
 
+    # -- watch -------------------------------------------------------------
+    def mark_opened(self, entry_id: int) -> EntryRead | None:
+        """Bump the open-link counter (called when the user follows the URL)."""
+        with self._session_factory() as session:
+            entry = EntryRepository(session).get(entry_id)
+            if entry is None:
+                return None
+            entry.open_count += 1
+            session.commit()
+            return EntryRead.model_validate(entry)
+
     # -- series navigation ----------------------------------------------------
     def next_episode(self, entry_id: int) -> EntryRead | None:
         return self._shift_episode(entry_id, +1)

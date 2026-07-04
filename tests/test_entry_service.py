@@ -56,3 +56,12 @@ def test_year_and_rating_other_roundtrip(service: EntryService) -> None:
     assert created.year == 2021
     assert created.rating == 8
     assert created.rating_other == 6
+
+
+def test_mark_opened_increments_count(service: EntryService) -> None:
+    e = service.create(EntryCreate(title="Dune", url="https://example.com/dune"))
+    assert e.open_count == 0
+    once = service.mark_opened(e.id)
+    twice = service.mark_opened(e.id)
+    assert once is not None and once.open_count == 1
+    assert twice is not None and twice.open_count == 2
