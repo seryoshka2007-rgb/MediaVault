@@ -2,12 +2,12 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
+
+from core.utils.paths import resource_root
 
 log = logging.getLogger(__name__)
 
-ROOT = Path(__file__).resolve().parent.parent.parent
-THEMES_DIR = ROOT / "themes"
+THEMES_DIR = resource_root() / "themes"
 
 
 def load_theme(name: str) -> str:

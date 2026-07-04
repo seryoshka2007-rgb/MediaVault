@@ -8,7 +8,7 @@ from collections.abc import Sequence
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from core.enums import Status
+from core.enums import EntryType, Status
 from core.models.entry import Entry
 
 
@@ -26,6 +26,18 @@ class EntryRepository:
 
     def delete(self, entry: Entry) -> None:
         self._session.delete(entry)
+
+    def find_duplicate(
+        self, *, url: str | None, title: str, entry_type: EntryType
+    ) -> Entry | None:
+        """Look up an existing entry matching by url (if given) or by title+type."""
+        if url:
+            stmt = select(Entry).where(Entry.url == url)
+        else:
+            stmt = select(Entry).where(
+                Entry.title.ilike(title), Entry.type == entry_type
+            )
+        return self._session.scalars(stmt).first()
 
     def list_all(self) -> Sequence[Entry]:
         stmt = select(Entry).order_by(Entry.updated_at.desc())

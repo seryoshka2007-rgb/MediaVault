@@ -11,9 +11,10 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 
 from core.utils.files import atomic_write_text
+from core.utils.paths import app_root
 
-# Project root = parent of the `config` package directory.
-ROOT = Path(__file__).resolve().parent.parent
+# Where user data lives: repo root in dev, the .exe's own folder when frozen.
+ROOT = app_root()
 CONFIG_PATH = ROOT / "config" / "settings.json"
 DEFAULT_CONFIG_PATH = ROOT / "config" / "settings.default.json"
 

@@ -20,6 +20,8 @@ class EntryCreate(BaseModel):
     original_title: str | None = Field(default=None, max_length=500)
     status: Status = Status.PLANNED
     rating: int | None = Field(default=None, ge=0, le=10)
+    rating_other: int | None = Field(default=None, ge=0, le=10)
+    year: int | None = Field(default=None, ge=1870, le=2100)
     url: str | None = Field(default=None, max_length=2000)
     description: str | None = None
     comment: str | None = None
@@ -45,6 +47,8 @@ class EntryUpdate(BaseModel):
     original_title: str | None = Field(default=None, max_length=500)
     status: Status | None = None
     rating: int | None = Field(default=None, ge=0, le=10)
+    rating_other: int | None = Field(default=None, ge=0, le=10)
+    year: int | None = Field(default=None, ge=1870, le=2100)
     url: str | None = Field(default=None, max_length=2000)
     description: str | None = None
     comment: str | None = None
@@ -62,7 +66,10 @@ class EntryRead(BaseModel):
     original_title: str | None
     status: Status
     rating: int | None
+    rating_other: int | None
+    year: int | None
     url: str | None
+    open_count: int
     description: str | None
     comment: str | None
     is_favorite: bool

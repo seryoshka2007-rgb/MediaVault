@@ -32,3 +32,36 @@ def test_series_navigation(service: EntryService) -> None:
                                    season=1, episode=1))
     nxt = service.next_episode(s.id)
     assert nxt is not None and nxt.episode == 2 and nxt.status == Status.WATCHING
+
+
+def test_find_duplicate_by_url(service: EntryService) -> None:
+    url = "https://kinogo.ec/125434-mandalorec-i-grogu.html"
+    service.create(EntryCreate(title="The Mandalorian", url=url))
+    dup = service.find_duplicate(title="Something Else", entry_type=EntryType.MOVIE, url=url)
+    assert dup is not None and dup.title == "The Mandalorian"
+
+
+def test_find_duplicate_by_title_and_type(service: EntryService) -> None:
+    service.create(EntryCreate(title="Dune", type=EntryType.MOVIE))
+    same_type = service.find_duplicate(title="dune", entry_type=EntryType.MOVIE, url=None)
+    other_type = service.find_duplicate(title="Dune", entry_type=EntryType.SERIES, url=None)
+    assert same_type is not None
+    assert other_type is None
+
+
+def test_year_and_rating_other_roundtrip(service: EntryService) -> None:
+    created = service.create(
+        EntryCreate(title="Dune", year=2021, rating=8, rating_other=6)
+    )
+    assert created.year == 2021
+    assert created.rating == 8
+    assert created.rating_other == 6
+
+
+def test_mark_opened_increments_count(service: EntryService) -> None:
+    e = service.create(EntryCreate(title="Dune", url="https://example.com/dune"))
+    assert e.open_count == 0
+    once = service.mark_opened(e.id)
+    twice = service.mark_opened(e.id)
+    assert once is not None and once.open_count == 1
+    assert twice is not None and twice.open_count == 2
