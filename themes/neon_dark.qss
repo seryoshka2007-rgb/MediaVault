@@ -1,0 +1,31 @@
+/* MediaVault — Neon Dark theme (v1). Modular: drop-in replaceable. */
+QWidget {
+    background-color: #0d1117;
+    color: #c9d1d9;
+    font-family: "Segoe UI", sans-serif;
+    font-size: 14px;
+}
+QLineEdit, QComboBox, QTextEdit {
+    background-color: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 6px;
+}
+QLineEdit:focus, QComboBox:focus, QTextEdit:focus {
+    border: 1px solid #39d0ff;
+}
+QPushButton {
+    background-color: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 6px 14px;
+}
+QPushButton:hover {
+    border: 1px solid #39d0ff;
+    color: #39d0ff;
+}
+QListWidget, QTableView {
+    background-color: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+}

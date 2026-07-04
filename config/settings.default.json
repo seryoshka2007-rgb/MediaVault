@@ -1,0 +1,10 @@
+{
+  "theme": "neon_dark",
+  "language": "ru",
+  "database_path": "database/mediavault.db",
+  "backups_dir": "backups",
+  "logs_dir": "logs",
+  "backup_keep": 30,
+  "autobackup_daily": true,
+  "sync_dir": null
+}

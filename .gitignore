@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# App data (never commit user data or secrets)
+database/*.db
+database/*.db-wal
+database/*.db-shm
+backups/*.db
+logs/*.log
+config/settings.json
+
+# Build
+build/
+dist/
+*.spec
+
+# Local Claude Code settings
+.claude/settings.local.json
