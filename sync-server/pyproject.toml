@@ -1,7 +1,7 @@
 [project]
-name = "mediavault"
-version = "0.2.0"
-description = "Local, offline-first personal media library for Windows."
+name = "mediavault-sync-server"
+version = "0.1.0"
+description = "Lightweight self-hosted sync server for MediaVault (personal, single-user, multi-device)."
 requires-python = ">=3.13"
 
 [tool.ruff]
@@ -15,7 +15,6 @@ select = ["E", "F", "I", "UP", "B", "ANN", "SIM"]
 python_version = "3.13"
 strict = true
 ignore_missing_imports = true
-exclude = ["^sync-server/", "^mobile/"]
 
 [tool.pytest.ini_options]
 addopts = "-q"
