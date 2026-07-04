@@ -1,6 +1,9 @@
 """Add/edit dialog for a single library entry. Talks only in DTOs (core.schemas)."""
 from __future__ import annotations
 
+import re
+from urllib.parse import urlparse
+
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -18,6 +21,18 @@ from core.schemas import EntryCreate, EntryRead, EntryUpdate
 from core.validators.url_validator import is_valid_url
 
 _NO_VALUE = -1  # spinbox sentinel meaning "not set" -> None
+
+
+def guess_title_from_url(url: str) -> str:
+    """Best-effort human-readable title from a link's last path segment.
+
+    Just a starting point for the user to edit — no network fetch involved.
+    """
+    slug = urlparse(url).path.rstrip("/").rsplit("/", 1)[-1]
+    slug = re.sub(r"\.\w+$", "", slug)  # drop file extension (.html, ...)
+    slug = re.sub(r"^\d+[-_]*", "", slug)  # drop a leading numeric id
+    words = re.split(r"[-_]+", slug)
+    return " ".join(w.capitalize() for w in words if w)
 
 
 def _spin_no_value(minimum: int, maximum: int) -> QSpinBox:
@@ -98,10 +113,24 @@ class EntryDialog(QDialog):
         root.addLayout(form)
         root.addWidget(buttons)
 
+    def _current_type(self) -> EntryType:
+        # PySide6 unwraps StrEnum values back to plain str through QVariant,
+        # so currentData() loses the enum wrapper - reconstruct it explicitly.
+        return EntryType(self._type.currentData())
+
+    def _current_status(self) -> Status:
+        return Status(self._status.currentData())
+
     def _on_type_changed(self) -> None:
-        episodic = self._type.currentData().is_episodic
+        episodic = self._current_type().is_episodic
         self._season.setEnabled(episodic)
         self._episode.setEnabled(episodic)
+
+    def prefill_from_url(self, url: str) -> None:
+        """Used by the "add by link" flow: set the link and a guessed title."""
+        self._url.setText(url)
+        if not self._title.text().strip():
+            self._title.setText(guess_title_from_url(url))
 
     def _prefill(self, entry: EntryRead) -> None:
         self._title.setText(entry.title)
@@ -138,10 +167,10 @@ class EntryDialog(QDialog):
 
     def to_create(self) -> EntryCreate:
         return EntryCreate(
-            type=self._type.currentData(),
+            type=self._current_type(),
             title=self._title.text().strip(),
             original_title=self._original_title.text().strip() or None,
-            status=self._status.currentData(),
+            status=self._current_status(),
             rating=self._none_if_unset(self._rating.value()),
             rating_other=self._none_if_unset(self._rating_other.value()),
             year=self._none_if_unset(self._year.value()),
@@ -157,7 +186,7 @@ class EntryDialog(QDialog):
         return EntryUpdate(
             title=self._title.text().strip(),
             original_title=self._original_title.text().strip() or None,
-            status=self._status.currentData(),
+            status=self._current_status(),
             rating=self._none_if_unset(self._rating.value()),
             rating_other=self._none_if_unset(self._rating_other.value()),
             year=self._none_if_unset(self._year.value()),

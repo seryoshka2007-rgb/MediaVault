@@ -4,6 +4,7 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QHBoxLayout,
+    QInputDialog,
     QLineEdit,
     QListWidget,
     QListWidgetItem,
@@ -18,6 +19,7 @@ from app.dialogs.entry_dialog import EntryDialog
 from core.enums import STATUS_LABELS_RU
 from core.schemas import EntryRead
 from core.services.entry_service import EntryService
+from core.validators.url_validator import is_valid_url
 
 _ENTRY_ID_ROLE = Qt.ItemDataRole.UserRole
 
@@ -66,7 +68,28 @@ class MainWindow(QMainWindow):
         return item.data(_ENTRY_ID_ROLE) if item else None
 
     def _on_add(self) -> None:
+        box = QMessageBox(self)
+        box.setWindowTitle("Добавление записи")
+        box.setText("Как добавить запись?")
+        by_link = box.addButton("По ссылке", QMessageBox.ButtonRole.AcceptRole)
+        manually = box.addButton("Вручную", QMessageBox.ButtonRole.AcceptRole)
+        box.addButton("Отмена", QMessageBox.ButtonRole.RejectRole)
+        box.exec()
+        clicked = box.clickedButton()
+
         dialog = EntryDialog(self)
+        if clicked is by_link:
+            url, ok = QInputDialog.getText(self, "Добавить по ссылке", "Вставьте ссылку:")
+            if not ok or not url.strip():
+                return
+            url = url.strip()
+            if not is_valid_url(url):
+                QMessageBox.warning(self, "Проверка", "Ссылка выглядит некорректно.")
+                return
+            dialog.prefill_from_url(url)
+        elif clicked is not manually:
+            return
+
         if dialog.exec() != EntryDialog.DialogCode.Accepted:
             return
         data = dialog.to_create()
