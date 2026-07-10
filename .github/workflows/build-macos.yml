@@ -1,0 +1,58 @@
+name: Build macOS app
+
+# PyInstaller can't cross-compile - a macOS .app can only be built ON macOS.
+# This runs on GitHub's hosted macOS runners so nobody needs a personal Mac
+# just to get a build; download the artifact from the workflow run and
+# unzip it on an actual Mac to run it.
+on:
+  push:
+    branches: [master]
+    paths:
+      - "app/**"
+      - "core/**"
+      - "config/**"
+      - "database/**"
+      - "providers/**"
+      - "themes/**"
+      - "resources/**"
+      - "main.py"
+      - "mediavault.spec"
+      - "requirements*.txt"
+      - ".github/workflows/build-macos.yml"
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: macos-14 # Apple Silicon (arm64)
+            arch: arm64
+          - os: macos-13 # Intel (x86_64)
+            arch: x86_64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Build with PyInstaller
+        run: pyinstaller mediavault.spec
+
+      - name: Zip the .app bundle
+        run: |
+          cd dist
+          ditto -c -k --sequesterRsrc --keepParent MediaVault.app "MediaVault-macos-${{ matrix.arch }}.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MediaVault-macos-${{ matrix.arch }}
+          path: dist/MediaVault-macos-${{ matrix.arch }}.zip
+          retention-days: 30
