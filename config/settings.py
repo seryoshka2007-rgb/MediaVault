@@ -28,6 +28,9 @@ class Settings(BaseModel):
     backup_keep: int = Field(default=30, ge=1)
     autobackup_daily: bool = True
     sync_dir: str | None = None  # optional shared folder for v1 sync
+    sync_server_url: str | None = None
+    sync_device_token: str | None = None
+    sync_last_synced_at: str | None = None  # ISO timestamp; JSON has no native datetime
 
     # -- resolved absolute paths ---------------------------------------------
     def db_path(self) -> Path:

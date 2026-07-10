@@ -8,16 +8,17 @@ from __future__ import annotations
 import logging
 import sys
 
-from config.settings import load_settings
+from config.settings import Settings, load_settings
 from core.services.backup_service import BackupService
 from core.services.entry_service import EntryService
+from core.services.sync_service import SyncService
 from core.utils.logging_setup import setup_logging
 from core.utils.paths import resource_root
 from database.engine import make_engine, make_session_factory
 from database.init import init_database
 
 
-def bootstrap() -> EntryService:
+def bootstrap() -> tuple[EntryService, SyncService, Settings]:
     settings = load_settings()
     setup_logging(settings.logs_path())
     log = logging.getLogger("mediavault")
@@ -31,11 +32,12 @@ def bootstrap() -> EntryService:
             settings.db_path(), settings.backups_path(), keep=settings.backup_keep
         ).create_daily_if_needed()
 
-    return EntryService(make_session_factory(engine))
+    session_factory = make_session_factory(engine)
+    return EntryService(session_factory), SyncService(session_factory), settings
 
 
 def main() -> int:
-    service = bootstrap()
+    entry_service, sync_service, settings = bootstrap()
     try:
         from PySide6.QtGui import QIcon
         from PySide6.QtWidgets import QApplication
@@ -52,7 +54,7 @@ def main() -> int:
     app = QApplication(sys.argv)
     app.setStyleSheet(load_theme("neon_dark"))
     app.setWindowIcon(QIcon(str(resource_root() / "resources" / "icon.ico")))
-    window = MainWindow(service)
+    window = MainWindow(entry_service, sync_service, settings)
     window.show()
     return app.exec()
 

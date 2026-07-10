@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from sqlalchemy.orm import Session, sessionmaker
+
 from core.enums import EntryType, Status
+from core.models.entry import Entry
 from core.schemas import EntryCreate, EntryUpdate
 from core.services.entry_service import EntryService
 
@@ -65,3 +68,29 @@ def test_mark_opened_increments_count(service: EntryService) -> None:
     twice = service.mark_opened(e.id)
     assert once is not None and once.open_count == 1
     assert twice is not None and twice.open_count == 2
+
+
+def test_create_assigns_unique_uuid(service: EntryService) -> None:
+    a = service.create(EntryCreate(title="Dune"))
+    b = service.create(EntryCreate(title="Interstellar"))
+    assert a.uuid and b.uuid
+    assert a.uuid != b.uuid
+
+
+def test_delete_is_soft_delete(
+    service: EntryService, session_factory: sessionmaker[Session]
+) -> None:
+    """Deleted entries disappear from the app (get/list_all/search) but the
+    row itself survives with deleted_at set - needed so other devices learn
+    about the deletion on their next sync pull."""
+    e = service.create(EntryCreate(title="Dune"))
+    assert service.delete(e.id) is True
+
+    assert service.get(e.id) is None
+    assert e.id not in [x.id for x in service.list_all()]
+
+    with session_factory() as session:
+        row = session.get(Entry, e.id)
+        assert row is not None
+        assert row.deleted_at is not None
+        assert row.uuid == e.uuid

@@ -25,10 +25,11 @@ def qapp() -> QApplication:
 def _existing_entry() -> EntryRead:
     now = dt.datetime.now(dt.UTC)
     return EntryRead(
-        id=1, type=EntryType.SERIES, title="Breaking Bad", original_title=None,
+        id=1, uuid="11111111-1111-1111-1111-111111111111",
+        type=EntryType.SERIES, title="Breaking Bad", original_title=None,
         status=Status.WATCHING, rating=9, rating_other=None, year=2008, url=None,
         open_count=3, description=None, comment=None, is_favorite=True, season=2, episode=5,
-        last_watched_at=None, created_at=now, updated_at=now,
+        last_watched_at=None, created_at=now, updated_at=now, deleted_at=None,
     )
 
 

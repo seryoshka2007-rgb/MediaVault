@@ -13,7 +13,7 @@
 | v0.9 | Link import via providers | scaffolded |
 | v1.0 | First full release | |
 | v2.0-A | Multiplatform design + sync-server skeleton + mobile/ scaffold | done (this session) |
-| v2.0-B | `Entry.uuid`/`deleted_at` + migration, `core/services/sync_service.py`, "Синхронизировать" в GUI | |
+| v2.0-B | `Entry.uuid`/`deleted_at` + migration, `core/services/sync_service.py`, "Синхронизировать" в GUI | done — sync-server deployed on user's Debian server (Tailscale), desktop client wired up |
 | v2.0-C | Flutter mobile app (iOS+Android) — screens, local DB, sync client | |
 | v2.0-D | macOS build of the desktop app (needs a physical Mac) | |
 
