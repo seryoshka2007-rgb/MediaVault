@@ -5,7 +5,7 @@ Run with: ``uvicorn sync_server.main:create_app --factory``
 so tests can call ``create_app(service=...)`` with an in-memory test service
 instead of the real one).
 
-Dependency functions (``get_service``/``get_device``) live at module level,
+Dependency functions (``get_service``/``get_auth``) live at module level,
 not as closures inside ``create_app()``: FastAPI resolves ``Annotated[...,
 Depends(...)]`` string annotations (from ``from __future__ import
 annotations``) via the function's ``__globals__`` only, not its enclosing
@@ -20,17 +20,16 @@ from typing import Annotated
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from sync_server.config import db_path, setup_key
+from sync_server.config import db_path
 from sync_server.database import init_db, make_engine, make_session_factory
-from sync_server.models import Device
 from sync_server.schemas import (
     PullResponse,
     PushRequest,
     PushResponse,
-    RegisterDeviceRequest,
-    RegisterDeviceResponse,
+    RegisterRequest,
+    RegisterResponse,
 )
-from sync_server.service import SyncService
+from sync_server.service import AuthenticatedDevice, SyncAuthError, SyncPermissionError, SyncService
 
 _bearer = HTTPBearer()
 
@@ -40,14 +39,14 @@ def get_service(request: Request) -> SyncService:
     return service
 
 
-def get_device(
+def get_auth(
     creds: Annotated[HTTPAuthorizationCredentials, Depends(_bearer)],
     svc: Annotated[SyncService, Depends(get_service)],
-) -> Device:
-    device = svc.authenticate(creds.credentials)
-    if device is None:
+) -> AuthenticatedDevice:
+    auth = svc.authenticate(creds.credentials)
+    if auth is None:
         raise HTTPException(status_code=401, detail="Invalid or unknown device token")
-    return device
+    return auth
 
 
 def create_app(service: SyncService | None = None) -> FastAPI:
@@ -59,29 +58,33 @@ def create_app(service: SyncService | None = None) -> FastAPI:
         service = SyncService(make_session_factory(engine))
     app.state.service = service
 
-    @app.post("/devices/register", response_model=RegisterDeviceResponse)
+    @app.post("/devices/register", response_model=RegisterResponse)
     def register_device(
-        body: RegisterDeviceRequest,
+        body: RegisterRequest,
         svc: Annotated[SyncService, Depends(get_service)],
-    ) -> RegisterDeviceResponse:
-        if body.setup_key != setup_key():
-            raise HTTPException(status_code=403, detail="Invalid setup key")
-        return svc.register_device(body.label)
+    ) -> RegisterResponse:
+        try:
+            return svc.register(body.key, body.person_name, body.label)
+        except SyncAuthError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except SyncPermissionError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     @app.post("/sync/push", response_model=PushResponse)
     def push(
         body: PushRequest,
         svc: Annotated[SyncService, Depends(get_service)],
-        _device: Annotated[Device, Depends(get_device)],
+        auth: Annotated[AuthenticatedDevice, Depends(get_auth)],
     ) -> PushResponse:
-        return PushResponse(results=svc.push(body.entries))
+        title_results, state_results = svc.push(auth, body.titles, body.states)
+        return PushResponse(title_results=title_results, state_results=state_results)
 
     @app.get("/sync/pull", response_model=PullResponse)
     def pull(
         since: dt.datetime,
         svc: Annotated[SyncService, Depends(get_service)],
-        _device: Annotated[Device, Depends(get_device)],
+        auth: Annotated[AuthenticatedDevice, Depends(get_auth)],
     ) -> PullResponse:
-        return svc.pull(since)
+        return svc.pull(auth, since)
 
     return app

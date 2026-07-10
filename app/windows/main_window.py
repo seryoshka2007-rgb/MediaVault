@@ -167,8 +167,15 @@ class MainWindow(QMainWindow):
         )
         if not ok or not server_url.strip():
             return False
-        setup_key, ok = QInputDialog.getText(self, "Синхронизация", "Setup key:")
-        if not ok or not setup_key.strip():
+        key, ok = QInputDialog.getText(
+            self, "Синхронизация", "Ключ (admin key — ваш, или ключ участника):"
+        )
+        if not ok or not key.strip():
+            return False
+        person_name, ok = QInputDialog.getText(
+            self, "Синхронизация", "Ваше имя (для общего сервера с другими людьми):"
+        )
+        if not ok or not person_name.strip():
             return False
         label, ok = QInputDialog.getText(
             self, "Синхронизация", "Название этого устройства:", text="Windows Desktop"
@@ -176,14 +183,15 @@ class MainWindow(QMainWindow):
         if not ok or not label.strip():
             return False
         try:
-            token = self._sync_service.register_device(
-                server_url.strip(), setup_key.strip(), label.strip()
+            token, role = self._sync_service.register_device(
+                server_url.strip(), key.strip(), person_name.strip(), label.strip()
             )
         except SyncError as exc:
             QMessageBox.warning(self, "Ошибка регистрации", str(exc))
             return False
         self._settings.sync_server_url = server_url.strip()
         self._settings.sync_device_token = token
+        self._settings.sync_role = role
         save_settings(self._settings)
         return True
 
@@ -198,9 +206,13 @@ class MainWindow(QMainWindow):
 
         assert self._settings.sync_server_url is not None
         assert self._settings.sync_device_token is not None
+        assert self._settings.sync_role is not None
         try:
             result = self._sync_service.sync_now(
-                self._settings.sync_server_url, self._settings.sync_device_token, since
+                self._settings.sync_server_url,
+                self._settings.sync_device_token,
+                self._settings.sync_role,
+                since,
             )
         except SyncError as exc:
             QMessageBox.warning(self, "Ошибка синхронизации", str(exc))
