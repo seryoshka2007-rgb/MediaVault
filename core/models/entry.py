@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import uuid as uuid_module
 
 from sqlalchemy import Boolean, DateTime, Integer, String, Text
 from sqlalchemy import Enum as SAEnum
@@ -21,6 +22,9 @@ class Entry(Base):
     __tablename__ = "entries"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    uuid: Mapped[str] = mapped_column(
+        String(36), unique=True, index=True, default=lambda: str(uuid_module.uuid4())
+    )
     type: Mapped[EntryType] = mapped_column(SAEnum(EntryType), index=True)
 
     title: Mapped[str] = mapped_column(String(500), index=True)
@@ -49,6 +53,7 @@ class Entry(Base):
     updated_at: Mapped[dt.datetime] = mapped_column(
         DateTime, default=_utcnow, onupdate=_utcnow
     )
+    deleted_at: Mapped[dt.datetime | None] = mapped_column(DateTime, default=None)
 
     def __repr__(self) -> str:  # pragma: no cover - debug helper
         return f"<Entry id={self.id} type={self.type.value!r} title={self.title!r}>"

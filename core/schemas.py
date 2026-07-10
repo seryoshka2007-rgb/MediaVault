@@ -61,6 +61,7 @@ class EntryRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    uuid: str
     type: EntryType
     title: str
     original_title: str | None
@@ -78,3 +79,42 @@ class EntryRead(BaseModel):
     last_watched_at: dt.datetime | None
     created_at: dt.datetime
     updated_at: dt.datetime
+    deleted_at: dt.datetime | None
+
+
+class EntrySyncData(BaseModel):
+    """Wire format for the sync protocol — mirrors sync-server's EntrySync.
+
+    Deliberately separate from EntryRead: this has no `id` (local ids don't
+    mean anything across devices — `uuid` is the sync identity), and unlike
+    EntryRead it's also used to validate incoming JSON from the server, not
+    just to read local ORM state.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    uuid: str
+    type: EntryType
+    title: str
+    original_title: str | None = None
+    status: Status
+    rating: int | None = None
+    rating_other: int | None = None
+    year: int | None = None
+    url: str | None = None
+    open_count: int = 0
+    description: str | None = None
+    comment: str | None = None
+    is_favorite: bool = False
+    season: int | None = None
+    episode: int | None = None
+    last_watched_at: dt.datetime | None = None
+    created_at: dt.datetime
+    updated_at: dt.datetime
+    deleted_at: dt.datetime | None = None
+
+
+class SyncResult(BaseModel):
+    pushed: int
+    pulled: int
+    synced_at: dt.datetime

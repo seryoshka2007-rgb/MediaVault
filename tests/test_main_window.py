@@ -11,8 +11,14 @@ from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from app.windows.main_window import MainWindow
+from config.settings import Settings
 from core.schemas import EntryCreate
 from core.services.entry_service import EntryService
+from core.services.sync_service import SyncService
+
+
+def _window(service: EntryService, sync_service: SyncService) -> MainWindow:
+    return MainWindow(service, sync_service, Settings())
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -22,7 +28,7 @@ def qapp() -> QApplication:
 
 
 def test_watch_button_opens_url_and_bumps_count(
-    service: EntryService, monkeypatch: pytest.MonkeyPatch
+    service: EntryService, sync_service: SyncService, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     entry = service.create(EntryCreate(title="Dune", url="https://example.com/dune"))
     opened_urls: list[str] = []
@@ -30,7 +36,7 @@ def test_watch_button_opens_url_and_bumps_count(
         QDesktopServices, "openUrl", lambda qurl: opened_urls.append(qurl.toString())
     )
 
-    window = MainWindow(service)
+    window = _window(service, sync_service)
     window._list.setCurrentRow(0)
     window._on_watch()
 
@@ -40,7 +46,7 @@ def test_watch_button_opens_url_and_bumps_count(
 
 
 def test_watch_button_without_url_shows_message(
-    service: EntryService, monkeypatch: pytest.MonkeyPatch
+    service: EntryService, sync_service: SyncService, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     service.create(EntryCreate(title="No Link"))
     opened_urls: list[str] = []
@@ -49,7 +55,7 @@ def test_watch_button_without_url_shows_message(
     )
     monkeypatch.setattr(QMessageBox, "information", lambda *a, **kw: None)
 
-    window = MainWindow(service)
+    window = _window(service, sync_service)
     window._list.setCurrentRow(0)
     window._on_watch()
 

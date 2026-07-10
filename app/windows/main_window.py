@@ -1,6 +1,8 @@
 """Main window. Talks ONLY to services — never to repositories/ORM/SQLite."""
 from __future__ import annotations
 
+import datetime as dt
+
 from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
@@ -17,18 +19,24 @@ from PySide6.QtWidgets import (
 )
 
 from app.dialogs.entry_dialog import EntryDialog
+from config.settings import Settings, save_settings
 from core.enums import STATUS_LABELS_RU
 from core.schemas import EntryRead
 from core.services.entry_service import EntryService
+from core.services.sync_service import SyncError, SyncService
 from core.validators.url_validator import is_valid_url
 
 _ENTRY_ID_ROLE = Qt.ItemDataRole.UserRole
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, entry_service: EntryService) -> None:
+    def __init__(
+        self, entry_service: EntryService, sync_service: SyncService, settings: Settings
+    ) -> None:
         super().__init__()
         self._service = entry_service
+        self._sync_service = sync_service
+        self._settings = settings
         self.setWindowTitle("MediaVault")
         self.resize(900, 600)
         self._build_ui()
@@ -49,11 +57,14 @@ class MainWindow(QMainWindow):
         edit_btn.clicked.connect(self._on_edit)
         delete_btn = QPushButton("Удалить")
         delete_btn.clicked.connect(self._on_delete)
+        sync_btn = QPushButton("Синхронизировать")
+        sync_btn.clicked.connect(self._on_sync)
         top.addWidget(self._search)
         top.addWidget(add_btn)
         top.addWidget(watch_btn)
         top.addWidget(edit_btn)
         top.addWidget(delete_btn)
+        top.addWidget(sync_btn)
 
         self._list = QListWidget()
         self._list.itemDoubleClicked.connect(lambda _item: self._on_edit())
@@ -148,6 +159,60 @@ class MainWindow(QMainWindow):
         if answer != QMessageBox.StandardButton.Yes:
             return
         self._service.delete(entry_id)
+        self._reload()
+
+    def _configure_sync(self) -> bool:
+        server_url, ok = QInputDialog.getText(
+            self, "Синхронизация", "Адрес сервера (например http://100.x.x.x:8000):"
+        )
+        if not ok or not server_url.strip():
+            return False
+        setup_key, ok = QInputDialog.getText(self, "Синхронизация", "Setup key:")
+        if not ok or not setup_key.strip():
+            return False
+        label, ok = QInputDialog.getText(
+            self, "Синхронизация", "Название этого устройства:", text="Windows Desktop"
+        )
+        if not ok or not label.strip():
+            return False
+        try:
+            token = self._sync_service.register_device(
+                server_url.strip(), setup_key.strip(), label.strip()
+            )
+        except SyncError as exc:
+            QMessageBox.warning(self, "Ошибка регистрации", str(exc))
+            return False
+        self._settings.sync_server_url = server_url.strip()
+        self._settings.sync_device_token = token
+        save_settings(self._settings)
+        return True
+
+    def _on_sync(self) -> None:
+        needs_setup = not self._settings.sync_server_url or not self._settings.sync_device_token
+        if needs_setup and not self._configure_sync():
+            return
+
+        since = None
+        if self._settings.sync_last_synced_at:
+            since = dt.datetime.fromisoformat(self._settings.sync_last_synced_at)
+
+        assert self._settings.sync_server_url is not None
+        assert self._settings.sync_device_token is not None
+        try:
+            result = self._sync_service.sync_now(
+                self._settings.sync_server_url, self._settings.sync_device_token, since
+            )
+        except SyncError as exc:
+            QMessageBox.warning(self, "Ошибка синхронизации", str(exc))
+            return
+
+        self._settings.sync_last_synced_at = result.synced_at.isoformat()
+        save_settings(self._settings)
+        QMessageBox.information(
+            self,
+            "Синхронизация завершена",
+            f"Отправлено: {result.pushed}\nПолучено: {result.pulled}",
+        )
         self._reload()
 
     def _render(self, entries: list[EntryRead]) -> None:
