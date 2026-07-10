@@ -5,11 +5,12 @@ from __future__ import annotations
 
 import datetime as dt
 from collections.abc import Sequence
+from typing import Any
 
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from core.enums import EntryType, Status
+from core.enums import EntryType, SortOption, Status
 from core.models.entry import Entry
 from core.schemas import TitleSyncData, UserStateSyncData
 
@@ -17,6 +18,13 @@ from core.schemas import TitleSyncData, UserStateSyncData
 # guarantees the first incoming UserState always looks newer, regardless of
 # how it compares to the Title's own timestamp.
 _NO_STATE_YET = dt.datetime(1970, 1, 1)
+
+_SORT_EXPRESSIONS: dict[SortOption, Any] = {
+    SortOption.UPDATED_DESC: Entry.updated_at.desc(),
+    SortOption.TITLE_ASC: Entry.title.asc(),
+    SortOption.YEAR_DESC: Entry.year.desc(),
+    SortOption.RATING_DESC: Entry.rating.desc(),
+}
 
 
 class EntryRepository:
@@ -130,6 +138,8 @@ class EntryRepository:
         *,
         status: Status | None = None,
         favorites_only: bool = False,
+        entry_type: EntryType | None = None,
+        sort: SortOption = SortOption.UPDATED_DESC,
     ) -> Sequence[Entry]:
         """Parameterized search across title/description/comment/url + filters."""
         stmt = select(Entry).where(Entry.deleted_at.is_(None))
@@ -148,5 +158,7 @@ class EntryRepository:
             stmt = stmt.where(Entry.status == status)
         if favorites_only:
             stmt = stmt.where(Entry.is_favorite.is_(True))
-        stmt = stmt.order_by(Entry.updated_at.desc())
+        if entry_type is not None:
+            stmt = stmt.where(Entry.type == entry_type)
+        stmt = stmt.order_by(_SORT_EXPRESSIONS[sort])
         return self._session.scalars(stmt).all()
