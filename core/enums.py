@@ -44,3 +44,20 @@ ENTRY_TYPE_LABELS_RU: dict[EntryType, str] = {
     EntryType.MOVIE: "Фильм",
     EntryType.SERIES: "Сериал",
 }
+
+
+class SortOption(StrEnum):
+    """List ordering, chosen by the user in the GUI."""
+
+    UPDATED_DESC = "updated_desc"
+    TITLE_ASC = "title_asc"
+    YEAR_DESC = "year_desc"
+    RATING_DESC = "rating_desc"
+
+
+SORT_LABELS_RU: dict[SortOption, str] = {
+    SortOption.UPDATED_DESC: "Дата изменения",
+    SortOption.TITLE_ASC: "Название (А-Я)",
+    SortOption.YEAR_DESC: "Год",
+    SortOption.RATING_DESC: "Оценка",
+}

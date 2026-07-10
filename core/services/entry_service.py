@@ -6,7 +6,7 @@ import logging
 
 from sqlalchemy.orm import Session, sessionmaker
 
-from core.enums import EntryType, Status
+from core.enums import EntryType, SortOption, Status
 from core.models.entry import Entry
 from core.repositories.entry_repository import EntryRepository
 from core.schemas import EntryCreate, EntryRead, EntryUpdate
@@ -76,10 +76,16 @@ class EntryService:
     def search(
         self, query: str = "", *, status: Status | None = None,
         favorites_only: bool = False,
+        entry_type: EntryType | None = None,
+        sort: SortOption = SortOption.UPDATED_DESC,
     ) -> list[EntryRead]:
         with self._session_factory() as session:
             rows = EntryRepository(session).search(
-                query, status=status, favorites_only=favorites_only
+                query,
+                status=status,
+                favorites_only=favorites_only,
+                entry_type=entry_type,
+                sort=sort,
             )
             return [EntryRead.model_validate(r) for r in rows]
 

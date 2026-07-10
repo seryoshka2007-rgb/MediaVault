@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session, sessionmaker
 
-from core.enums import EntryType, Status
+from core.enums import EntryType, SortOption, Status
 from core.models.entry import Entry
 from core.schemas import EntryCreate, EntryUpdate
 from core.services.entry_service import EntryService
@@ -94,3 +94,53 @@ def test_delete_is_soft_delete(
         assert row is not None
         assert row.deleted_at is not None
         assert row.uuid == e.uuid
+
+
+def test_search_filters_by_entry_type(service: EntryService) -> None:
+    service.create(EntryCreate(title="Dune", type=EntryType.MOVIE))
+    service.create(EntryCreate(title="Breaking Bad", type=EntryType.SERIES))
+
+    movies = service.search(entry_type=EntryType.MOVIE)
+    series = service.search(entry_type=EntryType.SERIES)
+
+    assert [e.title for e in movies] == ["Dune"]
+    assert [e.title for e in series] == ["Breaking Bad"]
+
+
+def test_search_sort_title_asc(service: EntryService) -> None:
+    service.create(EntryCreate(title="Zodiac"))
+    service.create(EntryCreate(title="Amelie"))
+
+    results = service.search(sort=SortOption.TITLE_ASC)
+
+    assert [e.title for e in results] == ["Amelie", "Zodiac"]
+
+
+def test_search_sort_rating_desc(service: EntryService) -> None:
+    service.create(EntryCreate(title="Low Rated", rating=3))
+    service.create(EntryCreate(title="High Rated", rating=9))
+    service.create(EntryCreate(title="Unrated"))
+
+    results = service.search(sort=SortOption.RATING_DESC)
+
+    # unrated (NULL) sorts last on DESC in SQLite
+    assert [e.title for e in results] == ["High Rated", "Low Rated", "Unrated"]
+
+
+def test_search_sort_year_desc(service: EntryService) -> None:
+    service.create(EntryCreate(title="Old Movie", year=1990))
+    service.create(EntryCreate(title="New Movie", year=2024))
+
+    results = service.search(sort=SortOption.YEAR_DESC)
+
+    assert [e.title for e in results] == ["New Movie", "Old Movie"]
+
+
+def test_search_combines_type_and_favorite_filters(service: EntryService) -> None:
+    service.create(EntryCreate(title="Fav Movie", type=EntryType.MOVIE, is_favorite=True))
+    service.create(EntryCreate(title="Plain Movie", type=EntryType.MOVIE, is_favorite=False))
+    service.create(EntryCreate(title="Fav Series", type=EntryType.SERIES, is_favorite=True))
+
+    results = service.search(entry_type=EntryType.MOVIE, favorites_only=True)
+
+    assert [e.title for e in results] == ["Fav Movie"]

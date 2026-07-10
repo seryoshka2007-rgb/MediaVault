@@ -6,6 +6,8 @@ import datetime as dt
 from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
     QHBoxLayout,
     QInputDialog,
     QLineEdit,
@@ -20,7 +22,14 @@ from PySide6.QtWidgets import (
 
 from app.dialogs.entry_dialog import EntryDialog
 from config.settings import Settings, save_settings
-from core.enums import STATUS_LABELS_RU
+from core.enums import (
+    ENTRY_TYPE_LABELS_RU,
+    SORT_LABELS_RU,
+    STATUS_LABELS_RU,
+    EntryType,
+    SortOption,
+    Status,
+)
 from core.schemas import EntryRead
 from core.services.entry_service import EntryService
 from core.services.sync_service import SyncError, SyncService
@@ -48,7 +57,7 @@ class MainWindow(QMainWindow):
 
         top = QHBoxLayout()
         self._search = QLineEdit(placeholderText="Поиск…")
-        self._search.textChanged.connect(self._on_search)
+        self._search.textChanged.connect(self._apply_filters)
         add_btn = QPushButton("Добавить")
         add_btn.clicked.connect(self._on_add)
         watch_btn = QPushButton("Смотреть")
@@ -66,17 +75,52 @@ class MainWindow(QMainWindow):
         top.addWidget(delete_btn)
         top.addWidget(sync_btn)
 
+        filters = QHBoxLayout()
+        self._type_filter = QComboBox()
+        self._type_filter.addItem("Все типы", None)
+        for entry_type in EntryType:
+            self._type_filter.addItem(ENTRY_TYPE_LABELS_RU[entry_type], entry_type)
+        self._type_filter.currentIndexChanged.connect(self._apply_filters)
+
+        self._status_filter = QComboBox()
+        self._status_filter.addItem("Все статусы", None)
+        for status in Status:
+            self._status_filter.addItem(STATUS_LABELS_RU[status], status)
+        self._status_filter.currentIndexChanged.connect(self._apply_filters)
+
+        self._favorite_filter = QCheckBox("Избранное")
+        self._favorite_filter.toggled.connect(self._apply_filters)
+
+        self._sort_combo = QComboBox()
+        for sort_option in SortOption:
+            self._sort_combo.addItem(SORT_LABELS_RU[sort_option], sort_option)
+        self._sort_combo.currentIndexChanged.connect(self._apply_filters)
+
+        filters.addWidget(self._type_filter)
+        filters.addWidget(self._status_filter)
+        filters.addWidget(self._favorite_filter)
+        filters.addWidget(self._sort_combo)
+        filters.addStretch()
+
         self._list = QListWidget()
         self._list.itemDoubleClicked.connect(lambda _item: self._on_edit())
         root.addLayout(top)
+        root.addLayout(filters)
         root.addWidget(self._list)
         self.setCentralWidget(central)
 
     def _reload(self) -> None:
-        self._render(self._service.list_all())
+        self._apply_filters()
 
-    def _on_search(self, text: str) -> None:
-        self._render(self._service.search(text))
+    def _apply_filters(self) -> None:
+        entries = self._service.search(
+            self._search.text(),
+            status=self._status_filter.currentData(),
+            favorites_only=self._favorite_filter.isChecked(),
+            entry_type=self._type_filter.currentData(),
+            sort=self._sort_combo.currentData(),
+        )
+        self._render(entries)
 
     def _selected_entry_id(self) -> int | None:
         item = self._list.currentItem()
