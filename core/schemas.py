@@ -82,13 +82,11 @@ class EntryRead(BaseModel):
     deleted_at: dt.datetime | None
 
 
-class EntrySyncData(BaseModel):
-    """Wire format for the sync protocol — mirrors sync-server's EntrySync.
-
-    Deliberately separate from EntryRead: this has no `id` (local ids don't
-    mean anything across devices — `uuid` is the sync identity), and unlike
-    EntryRead it's also used to validate incoming JSON from the server, not
-    just to read local ORM state.
+class TitleSyncData(BaseModel):
+    """Wire format for the shared-catalog half of the sync protocol —
+    mirrors sync-server's TitleSync. No personal fields here (see
+    UserStateSyncData) - catalog data is the same for everyone on the
+    server, unlike status/rating/favorite/...
     """
 
     model_config = ConfigDict(from_attributes=True)
@@ -97,21 +95,33 @@ class EntrySyncData(BaseModel):
     type: EntryType
     title: str
     original_title: str | None = None
-    status: Status
-    rating: int | None = None
-    rating_other: int | None = None
     year: int | None = None
     url: str | None = None
-    open_count: int = 0
     description: str | None = None
-    comment: str | None = None
-    is_favorite: bool = False
-    season: int | None = None
-    episode: int | None = None
-    last_watched_at: dt.datetime | None = None
     created_at: dt.datetime
     updated_at: dt.datetime
     deleted_at: dt.datetime | None = None
+
+
+class UserStateSyncData(BaseModel):
+    """Wire format for the personal half of the sync protocol — mirrors
+    sync-server's UserStateSync. No `person_id`/uuid of its own: the server
+    always attributes this to the authenticated device's Person, and on
+    this end it's always "me", one row per locally-tracked title."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    title_uuid: str
+    status: Status
+    rating: int | None = None
+    rating_other: int | None = None
+    is_favorite: bool = False
+    season: int | None = None
+    episode: int | None = None
+    open_count: int = 0
+    last_watched_at: dt.datetime | None = None
+    comment: str | None = None
+    updated_at: dt.datetime
 
 
 class SyncResult(BaseModel):

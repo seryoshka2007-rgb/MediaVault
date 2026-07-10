@@ -13,6 +13,12 @@ from core.schemas import EntryCreate, EntryRead, EntryUpdate
 
 log = logging.getLogger(__name__)
 
+# Fields that constitute the shared "catalog" part of an entry, as opposed
+# to personal state (status/rating/favorite/...). Used to decide whether an
+# edit needs to bump Entry.catalog_updated_at - see the field's docstring
+# in core/models/entry.py for why this is tracked separately.
+_CATALOG_FIELDS = {"title", "original_title", "year", "url", "description"}
+
 
 class EntryService:
     def __init__(self, session_factory: sessionmaker[Session]) -> None:
@@ -84,8 +90,11 @@ class EntryService:
             entry = repo.get(entry_id)
             if entry is None:
                 return None
-            for field, value in data.model_dump(exclude_unset=True).items():
+            changed = data.model_dump(exclude_unset=True)
+            for field, value in changed.items():
                 setattr(entry, field, value)
+            if _CATALOG_FIELDS & changed.keys():
+                entry.catalog_updated_at = dt.datetime.now(dt.UTC)
             session.commit()
             return EntryRead.model_validate(entry)
 

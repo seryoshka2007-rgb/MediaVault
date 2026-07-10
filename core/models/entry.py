@@ -53,6 +53,12 @@ class Entry(Base):
     updated_at: Mapped[dt.datetime] = mapped_column(
         DateTime, default=_utcnow, onupdate=_utcnow
     )
+    # Bumped only when catalog fields change (title/original_title/year/url/
+    # description), never automatically like `updated_at` - needed so that
+    # syncing a personal-only change (rating/status/...) can't accidentally
+    # look like a catalog edit and overwrite someone else's newer title edit
+    # on the shared sync server. See core/services/entry_service.py.
+    catalog_updated_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
     deleted_at: Mapped[dt.datetime | None] = mapped_column(DateTime, default=None)
 
     def __repr__(self) -> str:  # pragma: no cover - debug helper

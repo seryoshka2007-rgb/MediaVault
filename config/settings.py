@@ -30,6 +30,7 @@ class Settings(BaseModel):
     sync_dir: str | None = None  # optional shared folder for v1 sync
     sync_server_url: str | None = None
     sync_device_token: str | None = None
+    sync_role: str | None = None  # "admin" | "participant" - from registration
     sync_last_synced_at: str | None = None  # ISO timestamp; JSON has no native datetime
 
     # -- resolved absolute paths ---------------------------------------------
