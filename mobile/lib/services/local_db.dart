@@ -8,8 +8,6 @@ library;
 
 import 'package:sqflite/sqflite.dart';
 
-import '../models/entry.dart';
-
 class LocalEntryRepository {
   final Database _db;
 
