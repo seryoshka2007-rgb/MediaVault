@@ -204,6 +204,74 @@ def test_participant_cannot_delete_title_admin_can(client: TestClient) -> None:
     assert accept.json()["title_results"][0]["applied"] is True
 
 
+def test_admin_can_list_people_and_devices(client: TestClient) -> None:
+    admin = _register(client, key=ADMIN_KEY, person_name="Owner")
+    _register(client, key=PARTICIPANT_KEY, person_name="Alice", label="Phone")
+    admin_headers = {"Authorization": f"Bearer {admin['token']}"}
+
+    resp = client.get("/admin/people", headers=admin_headers)
+
+    assert resp.status_code == 200
+    people = resp.json()
+    names = {p["name"]: p for p in people}
+    assert set(names) == {"Owner", "Alice"}
+    assert names["Alice"]["role"] == "participant"
+    assert [d["label"] for d in names["Alice"]["devices"]] == ["Phone"]
+
+
+def test_participant_cannot_list_people(client: TestClient) -> None:
+    participant = _register(client, key=PARTICIPANT_KEY, person_name="Alice")
+    headers = {"Authorization": f"Bearer {participant['token']}"}
+
+    resp = client.get("/admin/people", headers=headers)
+
+    assert resp.status_code == 403
+
+
+def test_admin_can_revoke_a_participant_device(client: TestClient) -> None:
+    admin = _register(client, key=ADMIN_KEY, person_name="Owner")
+    participant = _register(client, key=PARTICIPANT_KEY, person_name="Alice")
+    admin_headers = {"Authorization": f"Bearer {admin['token']}"}
+    participant_headers = {"Authorization": f"Bearer {participant['token']}"}
+
+    revoke = client.delete(f"/admin/devices/{participant['device_id']}", headers=admin_headers)
+    assert revoke.status_code == 204
+
+    now = dt.datetime.now(dt.UTC)
+    resp = client.get(
+        "/sync/pull", params={"since": now.isoformat()}, headers=participant_headers
+    )
+    assert resp.status_code == 401
+
+
+def test_participant_cannot_revoke_devices(client: TestClient) -> None:
+    admin = _register(client, key=ADMIN_KEY, person_name="Owner")
+    participant = _register(client, key=PARTICIPANT_KEY, person_name="Alice")
+    participant_headers = {"Authorization": f"Bearer {participant['token']}"}
+
+    resp = client.delete(f"/admin/devices/{admin['device_id']}", headers=participant_headers)
+
+    assert resp.status_code == 403
+
+
+def test_admin_cannot_revoke_own_device(client: TestClient) -> None:
+    admin = _register(client, key=ADMIN_KEY, person_name="Owner")
+    admin_headers = {"Authorization": f"Bearer {admin['token']}"}
+
+    resp = client.delete(f"/admin/devices/{admin['device_id']}", headers=admin_headers)
+
+    assert resp.status_code == 403
+
+
+def test_revoke_unknown_device_is_404(client: TestClient) -> None:
+    admin = _register(client, key=ADMIN_KEY, person_name="Owner")
+    admin_headers = {"Authorization": f"Bearer {admin['token']}"}
+
+    resp = client.delete("/admin/devices/999999", headers=admin_headers)
+
+    assert resp.status_code == 404
+
+
 def test_push_without_token_rejected(client: TestClient) -> None:
     now = dt.datetime.now(dt.UTC)
     uuid = "44444444-4444-4444-4444-444444444444"

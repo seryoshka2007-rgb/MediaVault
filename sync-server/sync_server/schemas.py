@@ -79,3 +79,21 @@ class RegisterResponse(BaseModel):
     token: str
     person_name: str
     role: str
+
+
+class DeviceSummary(BaseModel):
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    device_id: int = Field(validation_alias="id")
+    label: str
+    created_at: dt.datetime
+
+
+class PersonSummary(BaseModel):
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    person_id: int = Field(validation_alias="id")
+    name: str
+    role: str
+    created_at: dt.datetime
+    devices: list[DeviceSummary] = Field(default_factory=list)
