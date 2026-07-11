@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from app.i18n import t
 from core.services.backup_service import BackupService
 
 _PATH_ROLE = Qt.ItemDataRole.UserRole
@@ -32,7 +33,7 @@ class BackupsDialog(QDialog):
     def __init__(self, parent: object, backup_service: BackupService) -> None:
         super().__init__(parent)  # type: ignore[arg-type]
         self._backup_service = backup_service
-        self.setWindowTitle("Резервные копии")
+        self.setWindowTitle(t("backups_window_title"))
         self.resize(480, 400)
         self._build_ui()
         self._reload()
@@ -43,9 +44,9 @@ class BackupsDialog(QDialog):
         root.addWidget(self._list)
 
         buttons = QHBoxLayout()
-        create_btn = QPushButton("Создать сейчас")
+        create_btn = QPushButton(t("create_now_button"))
         create_btn.clicked.connect(self._on_create)
-        restore_btn = QPushButton("Восстановить выбранную")
+        restore_btn = QPushButton(t("restore_selected_button"))
         restore_btn.clicked.connect(self._on_restore)
         buttons.addWidget(create_btn)
         buttons.addWidget(restore_btn)
@@ -68,26 +69,18 @@ class BackupsDialog(QDialog):
     def _on_create(self) -> None:
         self._backup_service.create(reason="manual")
         self._reload()
-        QMessageBox.information(self, "Готово", "Резервная копия создана.")
+        QMessageBox.information(self, t("done_title"), t("backup_created_message"))
 
     def _on_restore(self) -> None:
         item = self._list.currentItem()
         if item is None:
-            QMessageBox.information(self, "Выбор", "Выберите резервную копию из списка.")
+            QMessageBox.information(self, t("selection_title"), t("select_backup_from_list"))
             return
         answer = QMessageBox.question(
-            self,
-            "Восстановить",
-            "Текущие данные будут заменены выбранной резервной копией "
-            "(текущее состояние тоже сохранится в отдельный бэкап перед этим).\n"
-            "Изменения вступят в силу после перезапуска приложения. Продолжить?",
+            self, t("restore_title"), t("confirm_restore_body")
         )
         if answer != QMessageBox.StandardButton.Yes:
             return
         self._backup_service.restore(Path(item.data(_PATH_ROLE)))
-        QMessageBox.information(
-            self,
-            "Восстановлено",
-            "Готово. Перезапустите приложение, чтобы увидеть восстановленные данные.",
-        )
+        QMessageBox.information(self, t("restored_title"), t("restored_message"))
         self.accept()

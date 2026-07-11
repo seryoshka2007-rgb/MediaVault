@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from app.i18n import LANGUAGE_LABELS, SUPPORTED_LANGUAGES, t
 from app.theme.manager import THEMES_DIR, load_theme
 from config.settings import Settings, save_settings
 
@@ -32,7 +33,7 @@ class SettingsDialog(QDialog):
         super().__init__(parent)  # type: ignore[arg-type]
         self._settings = settings
         self._original_theme = settings.theme
-        self.setWindowTitle("Настройки")
+        self.setWindowTitle(t("settings"))
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -44,30 +45,34 @@ class SettingsDialog(QDialog):
         current_index = self._theme.findText(self._settings.theme)
         self._theme.setCurrentIndex(current_index if current_index >= 0 else 0)
         self._theme.currentTextChanged.connect(self._preview_theme)
-        form.addRow("Тема", self._theme)
+        form.addRow(t("theme_field"), self._theme)
+
+        self._language = QComboBox()
+        for language in SUPPORTED_LANGUAGES:
+            self._language.addItem(LANGUAGE_LABELS[language], language)
+        language_index = self._language.findData(self._settings.language)
+        self._language.setCurrentIndex(language_index if language_index >= 0 else 0)
+        form.addRow(t("language_field"), self._language)
 
         self._backup_keep = QSpinBox()
         self._backup_keep.setRange(1, 3650)
         self._backup_keep.setValue(self._settings.backup_keep)
-        form.addRow("Хранить резервных копий (шт.)", self._backup_keep)
+        form.addRow(t("backup_keep_field"), self._backup_keep)
 
-        self._autobackup_daily = QCheckBox("Ежедневный автоматический бэкап")
+        self._autobackup_daily = QCheckBox(t("autobackup_daily_field"))
         self._autobackup_daily.setChecked(self._settings.autobackup_daily)
         form.addRow(self._autobackup_daily)
 
         self._database_path = QLineEdit(self._settings.database_path)
-        form.addRow("Путь к базе данных", self._database_path)
+        form.addRow(t("db_path_field"), self._database_path)
 
         self._backups_dir = QLineEdit(self._settings.backups_dir)
-        form.addRow("Папка резервных копий", self._backups_dir)
+        form.addRow(t("backups_dir_field"), self._backups_dir)
 
         self._logs_dir = QLineEdit(self._settings.logs_dir)
-        form.addRow("Папка логов", self._logs_dir)
+        form.addRow(t("logs_dir_field"), self._logs_dir)
 
-        note = QLabel(
-            "Путь к базе данных и папки резервных копий/логов применяются "
-            "после перезапуска приложения."
-        )
+        note = QLabel(t("settings_restart_note"))
         note.setWordWrap(True)
 
         buttons = QDialogButtonBox(
@@ -92,6 +97,7 @@ class SettingsDialog(QDialog):
 
     def _on_accept(self) -> None:
         self._settings.theme = self._theme.currentText()
+        self._settings.language = self._language.currentData()
         self._settings.backup_keep = self._backup_keep.value()
         self._settings.autobackup_daily = self._autobackup_daily.isChecked()
         self._settings.database_path = self._database_path.text().strip() or (

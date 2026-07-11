@@ -1,0 +1,31 @@
+/* MediaVault — Light theme (v1). Modular: drop-in replaceable. */
+QWidget {
+    background-color: #f5f5f7;
+    color: #1c1c1e;
+    font-family: "Segoe UI", sans-serif;
+    font-size: 14px;
+}
+QLineEdit, QComboBox, QTextEdit {
+    background-color: #ffffff;
+    border: 1px solid #d0d0d5;
+    border-radius: 6px;
+    padding: 6px;
+}
+QLineEdit:focus, QComboBox:focus, QTextEdit:focus {
+    border: 1px solid #0a84ff;
+}
+QPushButton {
+    background-color: #ffffff;
+    border: 1px solid #d0d0d5;
+    border-radius: 6px;
+    padding: 6px 14px;
+}
+QPushButton:hover {
+    border: 1px solid #0a84ff;
+    color: #0a66cc;
+}
+QListWidget, QTableView {
+    background-color: #ffffff;
+    border: 1px solid #d0d0d5;
+    border-radius: 6px;
+}
