@@ -19,6 +19,7 @@
 | v2.0-E | Shared catalog (Title) + per-person state (UserState) + admin/participant roles, so several people can use one server | done — sync-server split, `Entry.catalog_updated_at`, sync setup dialog asks for person name |
 | v2.0-F | Non-blocking sync (background thread) + admin participant management (list people/devices, revoke a token) | done — `app/workers/sync_worker.py`, `GET /admin/people` + `DELETE /admin/devices/{id}`, "Участники" dialog in GUI |
 | v2.0-G | Bulk list operations (multi-select → delete/change status) | done — `QListWidget` extended-selection mode, "Применить статус к выбранным" control |
+| v2.0-H | Light theme, per-status row tint, i18n (RU/EN/UK) | done — `themes/light.qss` (auto-discovered, no code changes needed); status color-coding in the list; `app/i18n.py` dict-based translations (no Qt `.ts`/`.qm` pipeline), functional language selector in Settings (restart-required, same as path fields) |
 
 See `docs/MULTIPLATFORM.md` for the full architecture (sync protocol, conflict
 resolution, why iOS/Android need a separate Flutter codebase instead of

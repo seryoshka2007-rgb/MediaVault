@@ -53,6 +53,7 @@ def main() -> int:
         from PySide6.QtGui import QIcon
         from PySide6.QtWidgets import QApplication
 
+        from app.i18n import set_language
         from app.theme.manager import load_theme
         from app.windows.main_window import MainWindow
     except ImportError:
@@ -62,6 +63,7 @@ def main() -> int:
         )
         return 0
 
+    set_language(settings.language)
     app = QApplication(sys.argv)
     app.setStyleSheet(load_theme(settings.theme))
     app.setWindowIcon(QIcon(str(resource_root() / "resources" / "icon.ico")))

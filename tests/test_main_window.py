@@ -3,6 +3,7 @@ test_entry_dialog.py: pure service tests can't see Qt-layer bugs."""
 from __future__ import annotations
 
 import os
+from collections.abc import Iterator
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -11,7 +12,8 @@ from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import QApplication, QInputDialog, QMessageBox
 
 from app.dialogs.entry_dialog import EntryDialog
-from app.windows.main_window import MainWindow
+from app.i18n import set_language
+from app.windows.main_window import _STATUS_COLORS, MainWindow
 from config.settings import Settings
 from core.enums import Status
 from core.schemas import EntryCreate
@@ -19,6 +21,12 @@ from core.services.entry_service import EntryService
 from core.services.sync_service import SyncService
 from providers.base import ProviderResult
 from providers.registry import ProviderRegistry
+
+
+@pytest.fixture(autouse=True)
+def _reset_language() -> Iterator[None]:
+    yield
+    set_language("ru")
 
 
 def _window(
@@ -145,3 +153,22 @@ def test_bulk_status_change_applies_to_all_selected(
     assert service.get(b.id).status == Status.COMPLETED  # type: ignore[union-attr]
     c = next(e for e in service.list_all() if e.title == "C")
     assert c.status == Status.PLANNED
+
+
+def test_list_rows_tinted_by_status(service: EntryService, sync_service: SyncService) -> None:
+    service.create(EntryCreate(title="Dune", status=Status.COMPLETED))
+    service.create(EntryCreate(title="Dropped Show", status=Status.DROPPED))
+    window = _window(service, sync_service)
+
+    for row in range(window._list.count()):
+        item = window._list.item(row)
+        entry = next(e for e in service.list_all() if item.text().startswith(e.title))
+        assert item.background().color() == _STATUS_COLORS[entry.status]
+
+
+def test_language_switch_changes_button_text(
+    service: EntryService, sync_service: SyncService
+) -> None:
+    set_language("en")
+    window = _window(service, sync_service)
+    assert window._sync_btn.text() == "Synchronize"

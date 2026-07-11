@@ -1,8 +1,12 @@
-/// Mirrors `sync_server.schemas.EntrySync` (see ../../../sync-server) and the
-/// desktop app's `core/schemas.EntryRead` (see ../../../core/schemas.py).
-/// Keeping the same field names/shapes across Python and Dart is what makes
-/// "the same logic" hold even though the code itself is not shared.
+/// Local on-device row - one entry, catalog + personal fields together
+/// (same as the desktop app's single `Entry` table: the Title/UserState
+/// split is a *sync-wire-protocol* concern only, see title_sync.dart /
+/// user_state_sync.dart, not a local storage concern - mirrors
+/// `core/models/entry.py` + `core/schemas.EntryRead`).
 library;
+
+import 'title_sync.dart';
+import 'user_state_sync.dart';
 
 class Entry {
   final String uuid;
@@ -23,6 +27,13 @@ class Entry {
   final DateTime? lastWatchedAt;
   final DateTime createdAt;
   final DateTime updatedAt;
+  // Bumped only when a catalog field changes (title/original_title/year/
+  // url/description) - NOT on every personal-field edit. Same reasoning as
+  // `Entry.catalog_updated_at` on the desktop side: without this split, an
+  // edit to just your own rating/status would look like a catalog edit to
+  // the sync protocol and could wrongly clobber someone else's newer title
+  // edit. See core/models/entry.py for the full explanation.
+  final DateTime catalogUpdatedAt;
   final DateTime? deletedAt;
 
   const Entry({
@@ -32,6 +43,7 @@ class Entry {
     required this.status,
     required this.createdAt,
     required this.updatedAt,
+    required this.catalogUpdatedAt,
     this.originalTitle,
     this.rating,
     this.ratingOther,
@@ -46,6 +58,37 @@ class Entry {
     this.lastWatchedAt,
     this.deletedAt,
   });
+
+  /// The catalog half of this row, as sent to POST /sync/push.
+  TitleSync toTitleSync() => TitleSync(
+        uuid: uuid,
+        type: type,
+        title: title,
+        originalTitle: originalTitle,
+        year: year,
+        url: url,
+        description: description,
+        createdAt: createdAt,
+        updatedAt: catalogUpdatedAt,
+        deletedAt: deletedAt,
+      );
+
+  /// The personal half of this row, as sent to POST /sync/push. The server
+  /// always derives person_id from the authenticated device - never sent
+  /// here, same as desktop's UserStateSyncData.
+  UserStateSync toUserStateSync() => UserStateSync(
+        titleUuid: uuid,
+        status: status,
+        rating: rating,
+        ratingOther: ratingOther,
+        isFavorite: isFavorite,
+        season: season,
+        episode: episode,
+        openCount: openCount,
+        lastWatchedAt: lastWatchedAt,
+        comment: comment,
+        updatedAt: updatedAt,
+      );
 
   factory Entry.fromJson(Map<String, dynamic> json) => Entry(
         uuid: json['uuid'] as String,
@@ -68,6 +111,9 @@ class Entry {
             : DateTime.parse(json['last_watched_at'] as String),
         createdAt: DateTime.parse(json['created_at'] as String),
         updatedAt: DateTime.parse(json['updated_at'] as String),
+        catalogUpdatedAt: json['catalog_updated_at'] == null
+            ? DateTime.parse(json['updated_at'] as String)
+            : DateTime.parse(json['catalog_updated_at'] as String),
         deletedAt: json['deleted_at'] == null
             ? null
             : DateTime.parse(json['deleted_at'] as String),
@@ -89,6 +135,7 @@ class Entry {
         'is_favorite': isFavorite,
         'season': season,
         'episode': episode,
+        'catalog_updated_at': catalogUpdatedAt.toIso8601String(),
         'last_watched_at': lastWatchedAt?.toIso8601String(),
         'created_at': createdAt.toIso8601String(),
         'updated_at': updatedAt.toIso8601String(),

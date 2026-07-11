@@ -39,6 +39,7 @@ class LocalEntryRepository {
           last_watched_at TEXT,
           created_at TEXT NOT NULL,
           updated_at TEXT NOT NULL,
+          catalog_updated_at TEXT NOT NULL,
           deleted_at TEXT
         )
       '''),

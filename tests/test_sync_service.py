@@ -10,7 +10,7 @@ import requests
 from core.enums import Status
 from core.schemas import EntryCreate, EntryUpdate
 from core.services.entry_service import EntryService
-from core.services.sync_service import SyncError, SyncService
+from core.services.sync_service import _UNREACHABLE_MESSAGE, SyncError, SyncService
 
 
 class _FakeResponse:
@@ -23,7 +23,13 @@ class _FakeResponse:
 
     def raise_for_status(self) -> None:
         if self.status_code >= 400:
-            raise requests.exceptions.HTTPError(str(self.status_code))
+            # Mirror real requests.Response.raise_for_status(), which
+            # attaches the response to the raised error - _raise_sync_error
+            # uses exc.response's presence to tell "got an HTTP error
+            # response" apart from "never got a response at all".
+            error = requests.exceptions.HTTPError(str(self.status_code))
+            error.response = self  # type: ignore[assignment]
+            raise error
 
 
 def _empty_pull(*a: Any, **kw: Any) -> _FakeResponse:  # noqa: ANN401
@@ -54,15 +60,17 @@ def test_register_device_returns_token_and_role(
     }
 
 
-def test_register_device_network_error_raises_sync_error(
+def test_register_device_network_error_shows_friendly_unreachable_message(
     sync_service: SyncService, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     def fake_post(*a: Any, **kw: Any) -> _FakeResponse:  # noqa: ANN401
         raise requests.exceptions.ConnectionError("refused")
 
     monkeypatch.setattr(requests, "post", fake_post)
-    with pytest.raises(SyncError):
+    with pytest.raises(SyncError) as exc_info:
         sync_service.register_device("http://server:8000", "key", "Alice", "PC")
+
+    assert str(exc_info.value) == _UNREACHABLE_MESSAGE
 
 
 def test_list_participants_returns_parsed_summaries(
@@ -97,7 +105,7 @@ def test_list_participants_returns_parsed_summaries(
     assert participants[0].devices[0].label == "Desktop"
 
 
-def test_list_participants_forbidden_raises_sync_error(
+def test_list_participants_forbidden_shows_server_detail_not_generic_message(
     sync_service: SyncService, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     def fake_get(*a: Any, **kw: Any) -> _FakeResponse:  # noqa: ANN401
@@ -105,8 +113,11 @@ def test_list_participants_forbidden_raises_sync_error(
 
     monkeypatch.setattr(requests, "get", fake_get)
 
-    with pytest.raises(SyncError):
+    with pytest.raises(SyncError) as exc_info:
         sync_service.list_participants("http://server:8000", "participant-tok")
+
+    assert "requires admin role" in str(exc_info.value)
+    assert str(exc_info.value) != _UNREACHABLE_MESSAGE
 
 
 def test_revoke_device_sends_delete_with_auth(
@@ -127,7 +138,7 @@ def test_revoke_device_sends_delete_with_auth(
     assert captured["headers"]["Authorization"] == "Bearer admin-tok"
 
 
-def test_revoke_device_network_error_raises_sync_error(
+def test_revoke_device_network_error_shows_friendly_unreachable_message(
     sync_service: SyncService, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     def fake_delete(*a: Any, **kw: Any) -> _FakeResponse:  # noqa: ANN401
@@ -135,8 +146,10 @@ def test_revoke_device_network_error_raises_sync_error(
 
     monkeypatch.setattr(requests, "delete", fake_delete)
 
-    with pytest.raises(SyncError):
+    with pytest.raises(SyncError) as exc_info:
         sync_service.revoke_device("http://server:8000", "admin-tok", 42)
+
+    assert str(exc_info.value) == _UNREACHABLE_MESSAGE
 
 
 def test_push_sends_title_and_state_for_new_entry(
@@ -161,6 +174,37 @@ def test_push_sends_title_and_state_for_new_entry(
     assert captured["headers"]["Authorization"] == "Bearer tok"
     assert captured["json"]["titles"][0]["title"] == "Dune"
     assert captured["json"]["states"][0]["status"] == "planned"
+
+
+def test_push_network_error_shows_friendly_unreachable_message(
+    service: EntryService, sync_service: SyncService, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    service.create(EntryCreate(title="Dune"))
+
+    def fake_post(*a: Any, **kw: Any) -> _FakeResponse:  # noqa: ANN401
+        raise requests.exceptions.ConnectTimeout("timed out")
+
+    monkeypatch.setattr(requests, "post", fake_post)
+    monkeypatch.setattr(requests, "get", _empty_pull)
+
+    with pytest.raises(SyncError) as exc_info:
+        sync_service.sync_now("http://server:8000", "tok", "admin", since=None)
+
+    assert str(exc_info.value) == _UNREACHABLE_MESSAGE
+
+
+def test_pull_network_error_shows_friendly_unreachable_message(
+    sync_service: SyncService, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def fake_get(*a: Any, **kw: Any) -> _FakeResponse:  # noqa: ANN401
+        raise requests.exceptions.ConnectTimeout("timed out")
+
+    monkeypatch.setattr(requests, "get", fake_get)
+
+    with pytest.raises(SyncError) as exc_info:
+        sync_service.sync_now("http://server:8000", "tok", "admin", since=None)
+
+    assert str(exc_info.value) == _UNREACHABLE_MESSAGE
 
 
 def test_push_participant_skips_deleted_entry_entirely(

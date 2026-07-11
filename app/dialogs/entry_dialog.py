@@ -16,7 +16,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-from core.enums import ENTRY_TYPE_LABELS_RU, STATUS_LABELS_RU, EntryType, Status
+from app.i18n import entry_type_label, status_label, t
+from core.enums import EntryType, Status
 from core.schemas import EntryCreate, EntryRead, EntryUpdate
 from core.validators.url_validator import is_valid_url
 from providers.base import ProviderResult
@@ -50,7 +51,7 @@ class EntryDialog(QDialog):
     def __init__(self, parent: object = None, *, entry: EntryRead | None = None) -> None:
         super().__init__(parent)  # type: ignore[arg-type]
         self._entry = entry
-        self.setWindowTitle("Изменить запись" if entry else "Добавить запись")
+        self.setWindowTitle(t("edit_entry_title") if entry else t("add_entry_dialog_title"))
         self._build_ui()
         if entry is not None:
             self._prefill(entry)
@@ -61,48 +62,48 @@ class EntryDialog(QDialog):
         form = QFormLayout()
 
         self._title = QLineEdit()
-        form.addRow("Название*", self._title)
+        form.addRow(t("title_field"), self._title)
 
         self._original_title = QLineEdit()
-        form.addRow("Оригинальное название", self._original_title)
+        form.addRow(t("original_title_field"), self._original_title)
 
         self._type = QComboBox()
         for entry_type in EntryType:
-            self._type.addItem(ENTRY_TYPE_LABELS_RU[entry_type], entry_type)
+            self._type.addItem(entry_type_label(entry_type), entry_type)
         self._type.currentIndexChanged.connect(self._on_type_changed)
-        form.addRow("Тип", self._type)
+        form.addRow(t("type_field"), self._type)
 
         self._url = QLineEdit()
-        form.addRow("Ссылка", self._url)
+        form.addRow(t("url_field"), self._url)
 
         self._status = QComboBox()
         for status in Status:
-            self._status.addItem(STATUS_LABELS_RU[status], status)
-        form.addRow("Статус", self._status)
+            self._status.addItem(status_label(status), status)
+        form.addRow(t("status_field"), self._status)
 
         self._year = _spin_no_value(1870, 2100)
-        form.addRow("Год выпуска", self._year)
+        form.addRow(t("year_field"), self._year)
 
         self._rating = _spin_no_value(0, 10)
-        form.addRow("Моя оценка", self._rating)
+        form.addRow(t("my_rating_field"), self._rating)
 
         self._rating_other = _spin_no_value(0, 10)
-        form.addRow("Оценка (др. ПК)", self._rating_other)
+        form.addRow(t("other_rating_field"), self._rating_other)
 
         self._season = _spin_no_value(0, 9999)
-        form.addRow("Сезон", self._season)
+        form.addRow(t("season_field"), self._season)
 
         self._episode = _spin_no_value(0, 9999)
-        form.addRow("Серия", self._episode)
+        form.addRow(t("episode_field"), self._episode)
 
-        self._is_favorite = QCheckBox("Избранное")
+        self._is_favorite = QCheckBox(t("favorite"))
         form.addRow(self._is_favorite)
 
         self._description = QLineEdit()
-        form.addRow("Описание", self._description)
+        form.addRow(t("description_field"), self._description)
 
         self._comment = QLineEdit()
-        form.addRow("Комментарий", self._comment)
+        form.addRow(t("comment_field"), self._comment)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
@@ -164,11 +165,11 @@ class EntryDialog(QDialog):
 
     def _on_accept(self) -> None:
         if not self._title.text().strip():
-            QMessageBox.warning(self, "Проверка", "Название не может быть пустым.")
+            QMessageBox.warning(self, t("validation_title"), t("title_required"))
             return
         url = self._url.text().strip() or None
         if url and not is_valid_url(url):
-            QMessageBox.warning(self, "Проверка", "Ссылка выглядит некорректно.")
+            QMessageBox.warning(self, t("validation_title"), t("invalid_url"))
             return
         self.accept()
 

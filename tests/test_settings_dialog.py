@@ -26,7 +26,14 @@ def test_theme_combo_lists_available_themes() -> None:
     items = [dialog._theme.itemText(i) for i in range(dialog._theme.count())]
 
     assert "neon_dark" in items
+    assert "light" in items
     assert dialog._theme.currentText() == "neon_dark"
+
+
+def test_language_combo_defaults_to_settings_value() -> None:
+    dialog = SettingsDialog(None, Settings(language="en"))
+
+    assert dialog._language.currentData() == "en"
 
 
 def test_accept_saves_edited_values(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -38,6 +45,8 @@ def test_accept_saves_edited_values(monkeypatch: pytest.MonkeyPatch) -> None:
     dialog._backup_keep.setValue(7)
     dialog._autobackup_daily.setChecked(False)
     dialog._database_path.setText("custom/db.sqlite")
+    idx = dialog._language.findData("uk")
+    dialog._language.setCurrentIndex(idx)
 
     dialog._on_accept()
 
@@ -45,6 +54,7 @@ def test_accept_saves_edited_values(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.backup_keep == 7
     assert settings.autobackup_daily is False
     assert settings.database_path == "custom/db.sqlite"
+    assert settings.language == "uk"
 
 
 def test_reject_reverts_theme_preview(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from app.i18n import t
 from core.services.sync_service import SyncError, SyncService
 
 _DEVICE_ID_ROLE = Qt.ItemDataRole.UserRole
@@ -31,7 +32,7 @@ class ParticipantsDialog(QDialog):
         self._sync_service = sync_service
         self._server_url = server_url
         self._token = token
-        self.setWindowTitle("Участники")
+        self.setWindowTitle(t("participants"))
         self.resize(480, 400)
         self._build_ui()
         self._reload()
@@ -42,7 +43,7 @@ class ParticipantsDialog(QDialog):
         root.addWidget(self._list)
 
         buttons = QHBoxLayout()
-        revoke_btn = QPushButton("Отозвать токен устройства")
+        revoke_btn = QPushButton(t("revoke_device_button"))
         revoke_btn.clicked.connect(self._on_revoke)
         buttons.addWidget(revoke_btn)
         buttons.addStretch()
@@ -58,7 +59,7 @@ class ParticipantsDialog(QDialog):
         try:
             participants = self._sync_service.list_participants(self._server_url, self._token)
         except SyncError as exc:
-            QMessageBox.warning(self, "Ошибка", str(exc))
+            QMessageBox.warning(self, t("error_title"), str(exc))
             return
         for person in participants:
             header = QListWidgetItem(f"{person.name}  ({person.role})")
@@ -78,16 +79,16 @@ class ParticipantsDialog(QDialog):
             return
         device_id = item.data(_DEVICE_ID_ROLE)
         if device_id is None:
-            QMessageBox.information(self, "Выбор", "Выберите устройство (не строку с именем).")
+            QMessageBox.information(self, t("selection_title"), t("select_device_not_header"))
             return
         answer = QMessageBox.question(
-            self, "Отозвать токен", f"Отозвать токен «{item.text().strip()}»?"
+            self, t("revoke_token_title"), t("confirm_revoke", label=item.text().strip())
         )
         if answer != QMessageBox.StandardButton.Yes:
             return
         try:
             self._sync_service.revoke_device(self._server_url, self._token, device_id)
         except SyncError as exc:
-            QMessageBox.warning(self, "Ошибка", str(exc))
+            QMessageBox.warning(self, t("error_title"), str(exc))
             return
         self._reload()

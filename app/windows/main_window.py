@@ -4,7 +4,7 @@ from __future__ import annotations
 import datetime as dt
 
 from PySide6.QtCore import Qt, QUrl
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtGui import QColor, QDesktopServices
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -25,16 +25,10 @@ from app.dialogs.backups_dialog import BackupsDialog
 from app.dialogs.entry_dialog import EntryDialog
 from app.dialogs.participants_dialog import ParticipantsDialog
 from app.dialogs.settings_dialog import SettingsDialog
+from app.i18n import entry_type_label, sort_label, status_label, t
 from app.workers.sync_worker import SyncWorker
 from config.settings import Settings, save_settings
-from core.enums import (
-    ENTRY_TYPE_LABELS_RU,
-    SORT_LABELS_RU,
-    STATUS_LABELS_RU,
-    EntryType,
-    SortOption,
-    Status,
-)
+from core.enums import EntryType, SortOption, Status
 from core.schemas import EntryRead, EntryUpdate, SyncResult
 from core.services.backup_service import BackupService
 from core.services.entry_service import EntryService
@@ -43,6 +37,16 @@ from core.validators.url_validator import is_valid_url
 from providers.registry import ProviderRegistry
 
 _ENTRY_ID_ROLE = Qt.ItemDataRole.UserRole
+
+# Subtle per-status tint for list rows - low alpha so it reads as a hint,
+# not a solid block, and stays legible on both the light and dark themes.
+_STATUS_COLORS: dict[Status, QColor] = {
+    Status.PLANNED: QColor(100, 150, 255, 40),
+    Status.WATCHING: QColor(255, 200, 60, 40),
+    Status.PAUSED: QColor(150, 150, 150, 40),
+    Status.COMPLETED: QColor(80, 200, 120, 40),
+    Status.DROPPED: QColor(220, 80, 80, 40),
+}
 
 
 class MainWindow(QMainWindow):
@@ -71,24 +75,24 @@ class MainWindow(QMainWindow):
         root = QVBoxLayout(central)
 
         top = QHBoxLayout()
-        self._search = QLineEdit(placeholderText="Поиск…")
+        self._search = QLineEdit(placeholderText=t("search_placeholder"))
         self._search.textChanged.connect(self._apply_filters)
-        add_btn = QPushButton("Добавить")
+        add_btn = QPushButton(t("add"))
         add_btn.clicked.connect(self._on_add)
-        watch_btn = QPushButton("Смотреть")
+        watch_btn = QPushButton(t("watch"))
         watch_btn.clicked.connect(self._on_watch)
-        edit_btn = QPushButton("Изменить")
+        edit_btn = QPushButton(t("edit"))
         edit_btn.clicked.connect(self._on_edit)
-        delete_btn = QPushButton("Удалить")
+        delete_btn = QPushButton(t("delete"))
         delete_btn.clicked.connect(self._on_delete)
-        self._sync_btn = QPushButton("Синхронизировать")
+        self._sync_btn = QPushButton(t("sync"))
         self._sync_btn.clicked.connect(self._on_sync)
-        self._participants_btn = QPushButton("Участники")
+        self._participants_btn = QPushButton(t("participants"))
         self._participants_btn.clicked.connect(self._on_participants)
         self._participants_btn.setVisible(self._settings.sync_role == "admin")
-        settings_btn = QPushButton("Настройки")
+        settings_btn = QPushButton(t("settings"))
         settings_btn.clicked.connect(self._on_settings)
-        backups_btn = QPushButton("Бэкапы")
+        backups_btn = QPushButton(t("backups"))
         backups_btn.clicked.connect(self._on_backups)
         backups_btn.setEnabled(self._backup_service is not None)
         top.addWidget(self._search)
@@ -103,23 +107,23 @@ class MainWindow(QMainWindow):
 
         filters = QHBoxLayout()
         self._type_filter = QComboBox()
-        self._type_filter.addItem("Все типы", None)
+        self._type_filter.addItem(t("all_types"), None)
         for entry_type in EntryType:
-            self._type_filter.addItem(ENTRY_TYPE_LABELS_RU[entry_type], entry_type)
+            self._type_filter.addItem(entry_type_label(entry_type), entry_type)
         self._type_filter.currentIndexChanged.connect(self._apply_filters)
 
         self._status_filter = QComboBox()
-        self._status_filter.addItem("Все статусы", None)
+        self._status_filter.addItem(t("all_statuses"), None)
         for status in Status:
-            self._status_filter.addItem(STATUS_LABELS_RU[status], status)
+            self._status_filter.addItem(status_label(status), status)
         self._status_filter.currentIndexChanged.connect(self._apply_filters)
 
-        self._favorite_filter = QCheckBox("Избранное")
+        self._favorite_filter = QCheckBox(t("favorite"))
         self._favorite_filter.toggled.connect(self._apply_filters)
 
         self._sort_combo = QComboBox()
         for sort_option in SortOption:
-            self._sort_combo.addItem(SORT_LABELS_RU[sort_option], sort_option)
+            self._sort_combo.addItem(sort_label(sort_option), sort_option)
         self._sort_combo.currentIndexChanged.connect(self._apply_filters)
 
         filters.addWidget(self._type_filter)
@@ -131,8 +135,8 @@ class MainWindow(QMainWindow):
         bulk = QHBoxLayout()
         self._bulk_status_combo = QComboBox()
         for status in Status:
-            self._bulk_status_combo.addItem(STATUS_LABELS_RU[status], status)
-        bulk_apply_btn = QPushButton("Применить статус к выбранным")
+            self._bulk_status_combo.addItem(status_label(status), status)
+        bulk_apply_btn = QPushButton(t("apply_status_to_selected"))
         bulk_apply_btn.clicked.connect(self._on_bulk_status)
         bulk.addWidget(self._bulk_status_combo)
         bulk.addWidget(bulk_apply_btn)
@@ -169,22 +173,22 @@ class MainWindow(QMainWindow):
 
     def _on_add(self) -> None:
         box = QMessageBox(self)
-        box.setWindowTitle("Добавление записи")
-        box.setText("Как добавить запись?")
-        by_link = box.addButton("По ссылке", QMessageBox.ButtonRole.AcceptRole)
-        manually = box.addButton("Вручную", QMessageBox.ButtonRole.AcceptRole)
-        box.addButton("Отмена", QMessageBox.ButtonRole.RejectRole)
+        box.setWindowTitle(t("add_entry_msgbox_title"))
+        box.setText(t("how_to_add"))
+        by_link = box.addButton(t("by_link"), QMessageBox.ButtonRole.AcceptRole)
+        manually = box.addButton(t("manually"), QMessageBox.ButtonRole.AcceptRole)
+        box.addButton(t("cancel"), QMessageBox.ButtonRole.RejectRole)
         box.exec()
         clicked = box.clickedButton()
 
         dialog = EntryDialog(self)
         if clicked is by_link:
-            url, ok = QInputDialog.getText(self, "Добавить по ссылке", "Вставьте ссылку:")
+            url, ok = QInputDialog.getText(self, t("add_by_link_title"), t("paste_link"))
             if not ok or not url.strip():
                 return
             url = url.strip()
             if not is_valid_url(url):
-                QMessageBox.warning(self, "Проверка", "Ссылка выглядит некорректно.")
+                QMessageBox.warning(self, t("validation_title"), t("invalid_url"))
                 return
             result = self._providers.resolve(url)
             dialog.prefill_from_url(url, result)
@@ -199,7 +203,7 @@ class MainWindow(QMainWindow):
         )
         if duplicate is not None:
             QMessageBox.information(
-                self, "Уже есть в библиотеке", f"Уже добавлено: {duplicate.title}"
+                self, t("already_in_library_title"), t("already_added", title=duplicate.title)
             )
             return
         self._service.create(data)
@@ -213,7 +217,7 @@ class MainWindow(QMainWindow):
         if entry is None:
             return
         if not entry.url or not is_valid_url(entry.url):
-            QMessageBox.information(self, "Нет ссылки", "У этой записи нет корректной ссылки.")
+            QMessageBox.information(self, t("no_link_title"), t("no_valid_link"))
             return
         QDesktopServices.openUrl(QUrl(entry.url))
         self._service.mark_opened(entry_id)
@@ -240,10 +244,10 @@ class MainWindow(QMainWindow):
             entry = self._service.get(entry_ids[0])
             if entry is None:
                 return
-            prompt = f"Удалить «{entry.title}»?"
+            prompt = t("confirm_delete_one", title=entry.title)
         else:
-            prompt = f"Удалить выбранные записи ({len(entry_ids)} шт.)?"
-        answer = QMessageBox.question(self, "Удалить запись", prompt)
+            prompt = t("confirm_delete_many", count=len(entry_ids))
+        answer = QMessageBox.question(self, t("delete_entry_title"), prompt)
         if answer != QMessageBox.StandardButton.Yes:
             return
         for entry_id in entry_ids:
@@ -253,9 +257,7 @@ class MainWindow(QMainWindow):
     def _on_bulk_status(self) -> None:
         entry_ids = self._selected_entry_ids()
         if not entry_ids:
-            QMessageBox.information(
-                self, "Нет выбора", "Выберите одну или несколько записей в списке."
-            )
+            QMessageBox.information(self, t("no_selection_title"), t("select_one_or_more"))
             return
         status = self._bulk_status_combo.currentData()
         for entry_id in entry_ids:
@@ -264,22 +266,18 @@ class MainWindow(QMainWindow):
 
     def _configure_sync(self) -> bool:
         server_url, ok = QInputDialog.getText(
-            self, "Синхронизация", "Адрес сервера (например http://100.x.x.x:8000):"
+            self, t("sync_title"), t("server_address_prompt")
         )
         if not ok or not server_url.strip():
             return False
-        key, ok = QInputDialog.getText(
-            self, "Синхронизация", "Ключ (admin key — ваш, или ключ участника):"
-        )
+        key, ok = QInputDialog.getText(self, t("sync_title"), t("key_prompt"))
         if not ok or not key.strip():
             return False
-        person_name, ok = QInputDialog.getText(
-            self, "Синхронизация", "Ваше имя (для общего сервера с другими людьми):"
-        )
+        person_name, ok = QInputDialog.getText(self, t("sync_title"), t("your_name_prompt"))
         if not ok or not person_name.strip():
             return False
         label, ok = QInputDialog.getText(
-            self, "Синхронизация", "Название этого устройства:", text="Windows Desktop"
+            self, t("sync_title"), t("device_label_prompt"), text="Windows Desktop"
         )
         if not ok or not label.strip():
             return False
@@ -288,7 +286,7 @@ class MainWindow(QMainWindow):
                 server_url.strip(), key.strip(), person_name.strip(), label.strip()
             )
         except SyncError as exc:
-            QMessageBox.warning(self, "Ошибка регистрации", str(exc))
+            QMessageBox.warning(self, t("registration_error_title"), str(exc))
             return False
         self._settings.sync_server_url = server_url.strip()
         self._settings.sync_device_token = token
@@ -311,7 +309,7 @@ class MainWindow(QMainWindow):
         assert self._settings.sync_role is not None
 
         self._sync_btn.setEnabled(False)
-        self._sync_btn.setText("Синхронизация…")
+        self._sync_btn.setText(t("syncing_ellipsis"))
         worker = SyncWorker(
             self._sync_service,
             self._settings.sync_server_url,
@@ -331,17 +329,17 @@ class MainWindow(QMainWindow):
         save_settings(self._settings)
         QMessageBox.information(
             self,
-            "Синхронизация завершена",
-            f"Отправлено: {result.pushed}\nПолучено: {result.pulled}",
+            t("sync_complete_title"),
+            t("sync_complete_body", pushed=result.pushed, pulled=result.pulled),
         )
         self._reload()
 
     def _on_sync_failed(self, message: str) -> None:
-        QMessageBox.warning(self, "Ошибка синхронизации", message)
+        QMessageBox.warning(self, t("sync_error_title"), message)
 
     def _on_sync_finished(self) -> None:
         self._sync_btn.setEnabled(True)
-        self._sync_btn.setText("Синхронизировать")
+        self._sync_btn.setText(t("sync"))
         self._sync_worker = None
 
     def _on_settings(self) -> None:
@@ -369,13 +367,14 @@ class MainWindow(QMainWindow):
             fav = "★ " if e.is_favorite else ""
             year = f" ({e.year})" if e.year is not None else ""
             opens = f"  ▶{e.open_count}" if e.open_count else ""
-            status = STATUS_LABELS_RU[e.status]
+            status = status_label(e.status)
             ratings = []
             if e.rating is not None:
                 ratings.append(str(e.rating))
             if e.rating_other is not None:
-                ratings.append(f"др.ПК: {e.rating_other}")
+                ratings.append(t("other_pc_rating", rating=e.rating_other))
             rating_str = f"  [{', '.join(ratings)}]" if ratings else ""
             item = QListWidgetItem(f"{fav}{e.title}{year}{opens}  —  {status}{rating_str}")
             item.setData(_ENTRY_ID_ROLE, e.id)
+            item.setBackground(_STATUS_COLORS[e.status])
             self._list.addItem(item)
