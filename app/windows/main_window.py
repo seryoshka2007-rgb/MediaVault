@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 
 from app.dialogs.entry_dialog import EntryDialog
 from app.dialogs.participants_dialog import ParticipantsDialog
+from app.dialogs.settings_dialog import SettingsDialog
 from app.workers.sync_worker import SyncWorker
 from config.settings import Settings, save_settings
 from core.enums import (
@@ -36,18 +37,24 @@ from core.schemas import EntryRead, SyncResult
 from core.services.entry_service import EntryService
 from core.services.sync_service import SyncError, SyncService
 from core.validators.url_validator import is_valid_url
+from providers.registry import ProviderRegistry
 
 _ENTRY_ID_ROLE = Qt.ItemDataRole.UserRole
 
 
 class MainWindow(QMainWindow):
     def __init__(
-        self, entry_service: EntryService, sync_service: SyncService, settings: Settings
+        self,
+        entry_service: EntryService,
+        sync_service: SyncService,
+        settings: Settings,
+        provider_registry: ProviderRegistry | None = None,
     ) -> None:
         super().__init__()
         self._service = entry_service
         self._sync_service = sync_service
         self._settings = settings
+        self._providers = provider_registry if provider_registry is not None else ProviderRegistry()
         self._sync_worker: SyncWorker | None = None
         self.setWindowTitle("MediaVault")
         self.resize(900, 600)
@@ -74,6 +81,8 @@ class MainWindow(QMainWindow):
         self._participants_btn = QPushButton("Участники")
         self._participants_btn.clicked.connect(self._on_participants)
         self._participants_btn.setVisible(self._settings.sync_role == "admin")
+        settings_btn = QPushButton("Настройки")
+        settings_btn.clicked.connect(self._on_settings)
         top.addWidget(self._search)
         top.addWidget(add_btn)
         top.addWidget(watch_btn)
@@ -81,6 +90,7 @@ class MainWindow(QMainWindow):
         top.addWidget(delete_btn)
         top.addWidget(self._sync_btn)
         top.addWidget(self._participants_btn)
+        top.addWidget(settings_btn)
 
         filters = QHBoxLayout()
         self._type_filter = QComboBox()
@@ -152,7 +162,8 @@ class MainWindow(QMainWindow):
             if not is_valid_url(url):
                 QMessageBox.warning(self, "Проверка", "Ссылка выглядит некорректно.")
                 return
-            dialog.prefill_from_url(url)
+            result = self._providers.resolve(url)
+            dialog.prefill_from_url(url, result)
         elif clicked is not manually:
             return
 
@@ -293,6 +304,10 @@ class MainWindow(QMainWindow):
         self._sync_btn.setEnabled(True)
         self._sync_btn.setText("Синхронизировать")
         self._sync_worker = None
+
+    def _on_settings(self) -> None:
+        dialog = SettingsDialog(self, self._settings)
+        dialog.exec()
 
     def _on_participants(self) -> None:
         assert self._settings.sync_server_url is not None

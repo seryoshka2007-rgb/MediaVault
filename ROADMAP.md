@@ -8,9 +8,9 @@
 | v0.4 | Full CRUD dialogs | |
 | v0.5 | Search across fields + filters | |
 | v0.6 | Series navigation (next/prev episode) | core done |
-| v0.7 | Settings screen | |
+| v0.7 | Settings screen | done — `app/dialogs/settings_dialog.py` (theme with live preview, backup_keep, autobackup_daily, db/backups/logs paths — path changes need a restart); sync fields stay in the dedicated sync setup dialog |
 | v0.8 | Scheduled + pre-operation backups | core done |
-| v0.9 | Link import via providers | scaffolded |
+| v0.9 | Link import via providers | done — `providers/opengraph.py`: generic Open Graph/`<title>` provider, no new heavy deps (stdlib `html.parser` + existing `requests`); wired into "Добавить по ссылке" |
 | v1.0 | First full release | |
 | v2.0-A | Multiplatform design + sync-server skeleton + mobile/ scaffold | done (this session) |
 | v2.0-B | `Entry.uuid`/`deleted_at` + migration, `core/services/sync_service.py`, "Синхронизировать" в GUI | done — sync-server deployed on user's Debian server (Tailscale), desktop client wired up |

@@ -14,6 +14,7 @@ from PySide6.QtWidgets import QApplication
 from app.dialogs.entry_dialog import EntryDialog, guess_title_from_url
 from core.enums import EntryType, Status
 from core.schemas import EntryRead
+from providers.base import ProviderResult
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -56,6 +57,30 @@ def test_prefill_from_url_sets_url_and_guessed_title() -> None:
     assert data.url == url
     assert data.title == "Mandalorec I Grogu"
     assert data.type == EntryType.MOVIE
+
+
+def test_prefill_from_url_uses_provider_result_over_guess() -> None:
+    dialog = EntryDialog()
+    url = "https://kinogo.ec/125434-mandalorec-i-grogu.html#125434"
+    result = ProviderResult(
+        title="The Mandalorian and Grogu",
+        original_title="The Mandalorian & Grogu",
+        description="A bounty hunter and a child.",
+    )
+    dialog.prefill_from_url(url, result)
+    data = dialog.to_create()
+    assert data.url == url
+    assert data.title == "The Mandalorian and Grogu"
+    assert data.original_title == "The Mandalorian & Grogu"
+    assert data.description == "A bounty hunter and a child."
+
+
+def test_prefill_from_url_falls_back_to_guess_when_provider_finds_nothing() -> None:
+    dialog = EntryDialog()
+    url = "https://kinogo.ec/125434-mandalorec-i-grogu.html#125434"
+    dialog.prefill_from_url(url, ProviderResult())
+    data = dialog.to_create()
+    assert data.title == "Mandalorec I Grogu"
 
 
 def test_edit_dialog_prefill_roundtrip() -> None:

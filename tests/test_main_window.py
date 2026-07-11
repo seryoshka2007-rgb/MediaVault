@@ -8,17 +8,24 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
 from PySide6.QtGui import QDesktopServices
-from PySide6.QtWidgets import QApplication, QMessageBox
+from PySide6.QtWidgets import QApplication, QInputDialog, QMessageBox
 
+from app.dialogs.entry_dialog import EntryDialog
 from app.windows.main_window import MainWindow
 from config.settings import Settings
 from core.schemas import EntryCreate
 from core.services.entry_service import EntryService
 from core.services.sync_service import SyncService
+from providers.base import ProviderResult
+from providers.registry import ProviderRegistry
 
 
-def _window(service: EntryService, sync_service: SyncService) -> MainWindow:
-    return MainWindow(service, sync_service, Settings())
+def _window(
+    service: EntryService,
+    sync_service: SyncService,
+    provider_registry: ProviderRegistry | None = None,
+) -> MainWindow:
+    return MainWindow(service, sync_service, Settings(), provider_registry)
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -60,3 +67,36 @@ def test_watch_button_without_url_shows_message(
     window._on_watch()
 
     assert opened_urls == []
+
+
+class _FakeRegistry:
+    """Duck-types ProviderRegistry.resolve without a real network call."""
+
+    def __init__(self, result: ProviderResult) -> None:
+        self._result = result
+
+    def resolve(self, url: str) -> ProviderResult:
+        return self._result
+
+
+def test_add_by_link_prefills_from_provider_result(
+    service: EntryService, sync_service: SyncService, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    registry = _FakeRegistry(ProviderResult(title="From Provider", description="Synopsis"))
+    window = _window(service, sync_service, registry)  # type: ignore[arg-type]
+
+    # Simulate: user picks "По ссылке" (the first button added to the box),
+    # types a URL, and accepts the entry dialog as prefilled.
+    monkeypatch.setattr(QMessageBox, "exec", lambda self: None)
+    monkeypatch.setattr(QMessageBox, "clickedButton", lambda self: self.buttons()[0])
+    monkeypatch.setattr(
+        QInputDialog, "getText", staticmethod(lambda *a, **kw: ("https://example.com/movie", True))
+    )
+    monkeypatch.setattr(EntryDialog, "exec", lambda self: EntryDialog.DialogCode.Accepted)
+
+    window._on_add()
+
+    entries = service.list_all()
+    assert len(entries) == 1
+    assert entries[0].title == "From Provider"
+    assert entries[0].description == "Synopsis"
