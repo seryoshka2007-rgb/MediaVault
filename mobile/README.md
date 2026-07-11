@@ -22,16 +22,31 @@ flutter run
 но не общий код — PySide6/Qt не поддерживает iOS. Полная схема — в
 [`../docs/MULTIPLATFORM.md`](../docs/MULTIPLATFORM.md).
 
-- `lib/models/entry.dart` — зеркалит `EntrySync` из `../sync-server` /
-  `EntryRead` из `../core/schemas.py`. Те же имена полей, чтобы поведение
-  совпадало на всех платформах, даже если код не общий.
+Протокол синхронизации обновлён под текущий сервер (Phase E: разделение
+Title/UserState + роли admin/participant) — предыдущая версия этого скелета
+была написана под более раннюю плоскую версию протокола (`EntrySync`) и не
+соответствовала бы реальному API.
+
+- `lib/models/entry.dart` — локальная строка на устройстве (каталог +
+  личное состояние вместе), зеркалит `core/models/entry.py` /
+  `core/schemas.EntryRead`. Разделение на Title/UserState — только для
+  wire-протокола синхронизации, не для локального хранения (как и на
+  desktop). Даёт `toTitleSync()`/`toUserStateSync()` для пуша.
+- `lib/models/title_sync.dart` / `lib/models/user_state_sync.dart` —
+  wire-DTO, зеркалят `sync_server.schemas.TitleSync`/`UserStateSync` и
+  desktop `core/schemas.TitleSyncData`/`UserStateSyncData`.
 - `lib/services/local_db.dart` — **не реализовано** (только `CREATE TABLE` +
   TODO). Должно стать аналогом `core/repositories/entry_repository.py`:
   единственное место, которое трогает локальную sqflite-БД. Экраны не должны
   ходить в БД напрямую — то же правило слоёв, что в desktop-приложении.
-- `lib/services/sync_client.dart` — HTTP-клиент к `../sync-server`
-  (push/pull, per-device токен). Написан по протоколу из
-  `docs/MULTIPLATFORM.md`, не проверен реальным вызовом.
+- `lib/services/sync_client.dart` — HTTP-клиент к `../sync-server`:
+  `registerDevice()` (`{key, person_name, label}` → токен + роль),
+  `push()` (участник не пытается отправить удаление каталога — сервер бы
+  всё равно отклонил), `pull()` (titles + свои states). Написан по
+  актуальному протоколу сервера, но **не проверен реальным вызовом** —
+  админ-эндпоинты (`/admin/people`, `DELETE /admin/devices/{id}`) в мобильный
+  клиент сознательно не добавлены: управление участниками — desktop-only
+  функция администратора, не нужна на телефоне.
 - `lib/screens/library_screen.dart` — заглушка экрана списка.
 
 ## Что предстоит сделать (Phase C, не в этой сессии)
