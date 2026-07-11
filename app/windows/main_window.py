@@ -6,6 +6,7 @@ import datetime as dt
 from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QCheckBox,
     QComboBox,
     QHBoxLayout,
@@ -20,8 +21,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.dialogs.backups_dialog import BackupsDialog
 from app.dialogs.entry_dialog import EntryDialog
 from app.dialogs.participants_dialog import ParticipantsDialog
+from app.dialogs.settings_dialog import SettingsDialog
 from app.workers.sync_worker import SyncWorker
 from config.settings import Settings, save_settings
 from core.enums import (
@@ -32,22 +35,31 @@ from core.enums import (
     SortOption,
     Status,
 )
-from core.schemas import EntryRead, SyncResult
+from core.schemas import EntryRead, EntryUpdate, SyncResult
+from core.services.backup_service import BackupService
 from core.services.entry_service import EntryService
 from core.services.sync_service import SyncError, SyncService
 from core.validators.url_validator import is_valid_url
+from providers.registry import ProviderRegistry
 
 _ENTRY_ID_ROLE = Qt.ItemDataRole.UserRole
 
 
 class MainWindow(QMainWindow):
     def __init__(
-        self, entry_service: EntryService, sync_service: SyncService, settings: Settings
+        self,
+        entry_service: EntryService,
+        sync_service: SyncService,
+        settings: Settings,
+        provider_registry: ProviderRegistry | None = None,
+        backup_service: BackupService | None = None,
     ) -> None:
         super().__init__()
         self._service = entry_service
         self._sync_service = sync_service
         self._settings = settings
+        self._providers = provider_registry if provider_registry is not None else ProviderRegistry()
+        self._backup_service = backup_service
         self._sync_worker: SyncWorker | None = None
         self.setWindowTitle("MediaVault")
         self.resize(900, 600)
@@ -74,6 +86,11 @@ class MainWindow(QMainWindow):
         self._participants_btn = QPushButton("Участники")
         self._participants_btn.clicked.connect(self._on_participants)
         self._participants_btn.setVisible(self._settings.sync_role == "admin")
+        settings_btn = QPushButton("Настройки")
+        settings_btn.clicked.connect(self._on_settings)
+        backups_btn = QPushButton("Бэкапы")
+        backups_btn.clicked.connect(self._on_backups)
+        backups_btn.setEnabled(self._backup_service is not None)
         top.addWidget(self._search)
         top.addWidget(add_btn)
         top.addWidget(watch_btn)
@@ -81,6 +98,8 @@ class MainWindow(QMainWindow):
         top.addWidget(delete_btn)
         top.addWidget(self._sync_btn)
         top.addWidget(self._participants_btn)
+        top.addWidget(settings_btn)
+        top.addWidget(backups_btn)
 
         filters = QHBoxLayout()
         self._type_filter = QComboBox()
@@ -109,10 +128,22 @@ class MainWindow(QMainWindow):
         filters.addWidget(self._sort_combo)
         filters.addStretch()
 
+        bulk = QHBoxLayout()
+        self._bulk_status_combo = QComboBox()
+        for status in Status:
+            self._bulk_status_combo.addItem(STATUS_LABELS_RU[status], status)
+        bulk_apply_btn = QPushButton("Применить статус к выбранным")
+        bulk_apply_btn.clicked.connect(self._on_bulk_status)
+        bulk.addWidget(self._bulk_status_combo)
+        bulk.addWidget(bulk_apply_btn)
+        bulk.addStretch()
+
         self._list = QListWidget()
+        self._list.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self._list.itemDoubleClicked.connect(lambda _item: self._on_edit())
         root.addLayout(top)
         root.addLayout(filters)
+        root.addLayout(bulk)
         root.addWidget(self._list)
         self.setCentralWidget(central)
 
@@ -133,6 +164,9 @@ class MainWindow(QMainWindow):
         item = self._list.currentItem()
         return item.data(_ENTRY_ID_ROLE) if item else None
 
+    def _selected_entry_ids(self) -> list[int]:
+        return [item.data(_ENTRY_ID_ROLE) for item in self._list.selectedItems()]
+
     def _on_add(self) -> None:
         box = QMessageBox(self)
         box.setWindowTitle("Добавление записи")
@@ -152,7 +186,8 @@ class MainWindow(QMainWindow):
             if not is_valid_url(url):
                 QMessageBox.warning(self, "Проверка", "Ссылка выглядит некорректно.")
                 return
-            dialog.prefill_from_url(url)
+            result = self._providers.resolve(url)
+            dialog.prefill_from_url(url, result)
         elif clicked is not manually:
             return
 
@@ -198,18 +233,33 @@ class MainWindow(QMainWindow):
         self._reload()
 
     def _on_delete(self) -> None:
-        entry_id = self._selected_entry_id()
-        if entry_id is None:
+        entry_ids = self._selected_entry_ids()
+        if not entry_ids:
             return
-        entry = self._service.get(entry_id)
-        if entry is None:
-            return
-        answer = QMessageBox.question(
-            self, "Удалить запись", f"Удалить «{entry.title}»?"
-        )
+        if len(entry_ids) == 1:
+            entry = self._service.get(entry_ids[0])
+            if entry is None:
+                return
+            prompt = f"Удалить «{entry.title}»?"
+        else:
+            prompt = f"Удалить выбранные записи ({len(entry_ids)} шт.)?"
+        answer = QMessageBox.question(self, "Удалить запись", prompt)
         if answer != QMessageBox.StandardButton.Yes:
             return
-        self._service.delete(entry_id)
+        for entry_id in entry_ids:
+            self._service.delete(entry_id)
+        self._reload()
+
+    def _on_bulk_status(self) -> None:
+        entry_ids = self._selected_entry_ids()
+        if not entry_ids:
+            QMessageBox.information(
+                self, "Нет выбора", "Выберите одну или несколько записей в списке."
+            )
+            return
+        status = self._bulk_status_combo.currentData()
+        for entry_id in entry_ids:
+            self._service.update(entry_id, EntryUpdate(status=status))
         self._reload()
 
     def _configure_sync(self) -> bool:
@@ -293,6 +343,16 @@ class MainWindow(QMainWindow):
         self._sync_btn.setEnabled(True)
         self._sync_btn.setText("Синхронизировать")
         self._sync_worker = None
+
+    def _on_settings(self) -> None:
+        dialog = SettingsDialog(self, self._settings)
+        dialog.exec()
+
+    def _on_backups(self) -> None:
+        if self._backup_service is None:
+            return
+        dialog = BackupsDialog(self, self._backup_service)
+        dialog.exec()
 
     def _on_participants(self) -> None:
         assert self._settings.sync_server_url is not None

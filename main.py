@@ -16,9 +16,11 @@ from core.utils.logging_setup import setup_logging
 from core.utils.paths import resource_root
 from database.engine import make_engine, make_session_factory
 from database.init import init_database
+from providers.opengraph import OpenGraphProvider
+from providers.registry import ProviderRegistry
 
 
-def bootstrap() -> tuple[EntryService, SyncService, Settings]:
+def bootstrap() -> tuple[EntryService, SyncService, Settings, ProviderRegistry, BackupService]:
     settings = load_settings()
     setup_logging(settings.logs_path())
     log = logging.getLogger("mediavault")
@@ -27,17 +29,26 @@ def bootstrap() -> tuple[EntryService, SyncService, Settings]:
     engine = make_engine(settings.db_path())
     init_database(engine, settings.db_path())
 
+    backup_service = BackupService(
+        settings.db_path(), settings.backups_path(), keep=settings.backup_keep
+    )
     if settings.autobackup_daily:
-        BackupService(
-            settings.db_path(), settings.backups_path(), keep=settings.backup_keep
-        ).create_daily_if_needed()
+        backup_service.create_daily_if_needed()
 
     session_factory = make_session_factory(engine)
-    return EntryService(session_factory), SyncService(session_factory), settings
+    providers = ProviderRegistry()
+    providers.register(OpenGraphProvider())
+    return (
+        EntryService(session_factory),
+        SyncService(session_factory),
+        settings,
+        providers,
+        backup_service,
+    )
 
 
 def main() -> int:
-    entry_service, sync_service, settings = bootstrap()
+    entry_service, sync_service, settings, providers, backup_service = bootstrap()
     try:
         from PySide6.QtGui import QIcon
         from PySide6.QtWidgets import QApplication
@@ -52,9 +63,9 @@ def main() -> int:
         return 0
 
     app = QApplication(sys.argv)
-    app.setStyleSheet(load_theme("neon_dark"))
+    app.setStyleSheet(load_theme(settings.theme))
     app.setWindowIcon(QIcon(str(resource_root() / "resources" / "icon.ico")))
-    window = MainWindow(entry_service, sync_service, settings)
+    window = MainWindow(entry_service, sync_service, settings, providers, backup_service)
     window.show()
     return app.exec()
 

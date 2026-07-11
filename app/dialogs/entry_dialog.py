@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 from core.enums import ENTRY_TYPE_LABELS_RU, STATUS_LABELS_RU, EntryType, Status
 from core.schemas import EntryCreate, EntryRead, EntryUpdate
 from core.validators.url_validator import is_valid_url
+from providers.base import ProviderResult
 
 _NO_VALUE = -1  # spinbox sentinel meaning "not set" -> None
 
@@ -126,9 +127,19 @@ class EntryDialog(QDialog):
         self._season.setEnabled(episodic)
         self._episode.setEnabled(episodic)
 
-    def prefill_from_url(self, url: str) -> None:
-        """Used by the "add by link" flow: set the link and a guessed title."""
+    def prefill_from_url(self, url: str, result: ProviderResult | None = None) -> None:
+        """Used by the "add by link" flow: set the link, plus a title - from
+        a provider's fetched metadata if any was found, otherwise a guess
+        from the URL's slug."""
         self._url.setText(url)
+        if result is not None and result.title:
+            if not self._title.text().strip():
+                self._title.setText(result.title)
+            if result.original_title and not self._original_title.text().strip():
+                self._original_title.setText(result.original_title)
+            if result.description and not self._description.text().strip():
+                self._description.setText(result.description)
+            return
         if not self._title.text().strip():
             self._title.setText(guess_title_from_url(url))
 
