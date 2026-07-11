@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
-from typing import Any
+from typing import Any, NoReturn
 
 import requests
 from sqlalchemy.orm import Session, sessionmaker
@@ -37,6 +37,12 @@ def _naive_utc(value: dt.datetime) -> dt.datetime:
     return value
 
 
+_UNREACHABLE_MESSAGE = (
+    "Сервер синхронизации сейчас недоступен. Повторите попытку позже — "
+    "изменения останутся локально и синхронизируются при следующей попытке."
+)
+
+
 def _error_detail(exc: requests.exceptions.RequestException) -> str:
     if exc.response is not None:
         try:
@@ -46,6 +52,16 @@ def _error_detail(exc: requests.exceptions.RequestException) -> str:
         if detail:
             return str(detail)
     return str(exc)
+
+
+def _raise_sync_error(exc: requests.exceptions.RequestException, action: str) -> NoReturn:
+    """Connection-level failures (no response at all - refused/timed out/DNS)
+    get a friendly, actionable message instead of the raw exception text;
+    a real HTTP error response (403/500/...) still shows its detail, since
+    that's actionable in a different way (e.g. "requires admin role")."""
+    if exc.response is None:
+        raise SyncError(_UNREACHABLE_MESSAGE) from exc
+    raise SyncError(f"Не удалось {action}: {_error_detail(exc)}") from exc
 
 
 class SyncService:
@@ -65,9 +81,7 @@ class SyncService:
             )
             resp.raise_for_status()
         except requests.exceptions.RequestException as exc:
-            raise SyncError(
-                f"Не удалось зарегистрировать устройство: {_error_detail(exc)}"
-            ) from exc
+            _raise_sync_error(exc, "зарегистрировать устройство")
         data = resp.json()
         token = data["token"]
         role = data["role"]
@@ -85,9 +99,7 @@ class SyncService:
             )
             resp.raise_for_status()
         except requests.exceptions.RequestException as exc:
-            raise SyncError(
-                f"Не удалось получить список участников: {_error_detail(exc)}"
-            ) from exc
+            _raise_sync_error(exc, "получить список участников")
         return [ParticipantSummary.model_validate(item) for item in resp.json()]
 
     def revoke_device(self, server_url: str, token: str, device_id: int) -> None:
@@ -100,7 +112,7 @@ class SyncService:
             )
             resp.raise_for_status()
         except requests.exceptions.RequestException as exc:
-            raise SyncError(f"Не удалось отозвать токен: {_error_detail(exc)}") from exc
+            _raise_sync_error(exc, "отозвать токен")
 
     def sync_now(
         self, server_url: str, device_token: str, role: str, since: dt.datetime | None
@@ -151,9 +163,7 @@ class SyncService:
             )
             resp.raise_for_status()
         except requests.exceptions.RequestException as exc:
-            raise SyncError(
-                f"Не удалось отправить изменения на сервер: {_error_detail(exc)}"
-            ) from exc
+            _raise_sync_error(exc, "отправить изменения на сервер")
         return len(titles) + len(states)
 
     def _pull(self, server_url: str, token: str, since: dt.datetime) -> int:
@@ -166,9 +176,7 @@ class SyncService:
             )
             resp.raise_for_status()
         except requests.exceptions.RequestException as exc:
-            raise SyncError(
-                f"Не удалось получить изменения с сервера: {_error_detail(exc)}"
-            ) from exc
+            _raise_sync_error(exc, "получить изменения с сервера")
 
         body = resp.json()
         incoming_titles = [TitleSyncData.model_validate(item) for item in body["titles"]]
