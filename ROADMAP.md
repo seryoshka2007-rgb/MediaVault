@@ -9,7 +9,7 @@
 | v0.5 | Search across fields + filters | |
 | v0.6 | Series navigation (next/prev episode) | core done |
 | v0.7 | Settings screen | done — `app/dialogs/settings_dialog.py` (theme with live preview, backup_keep, autobackup_daily, db/backups/logs paths — path changes need a restart); sync fields stay in the dedicated sync setup dialog |
-| v0.8 | Scheduled + pre-operation backups | core done |
+| v0.8 | Scheduled + pre-operation backups | done — core + `app/dialogs/backups_dialog.py` browsing/restore screen. `BackupService.restore()` via SQLite backup API (never raw file copy), takes a pre_restore safety backup first; takes effect after an app restart |
 | v0.9 | Link import via providers | done — `providers/opengraph.py`: generic Open Graph/`<title>` provider, no new heavy deps (stdlib `html.parser` + existing `requests`); wired into "Добавить по ссылке" |
 | v1.0 | First full release | |
 | v2.0-A | Multiplatform design + sync-server skeleton + mobile/ scaffold | done (this session) |
@@ -18,6 +18,7 @@
 | v2.0-D | macOS build of the desktop app via GitHub Actions CI (no physical Mac needed) | done — `.github/workflows/build-macos.yml`, unsigned .app (Gatekeeper warning on first run) |
 | v2.0-E | Shared catalog (Title) + per-person state (UserState) + admin/participant roles, so several people can use one server | done — sync-server split, `Entry.catalog_updated_at`, sync setup dialog asks for person name |
 | v2.0-F | Non-blocking sync (background thread) + admin participant management (list people/devices, revoke a token) | done — `app/workers/sync_worker.py`, `GET /admin/people` + `DELETE /admin/devices/{id}`, "Участники" dialog in GUI |
+| v2.0-G | Bulk list operations (multi-select → delete/change status) | done — `QListWidget` extended-selection mode, "Применить статус к выбранным" control |
 
 See `docs/MULTIPLATFORM.md` for the full architecture (sync protocol, conflict
 resolution, why iOS/Android need a separate Flutter codebase instead of

@@ -13,6 +13,7 @@ from PySide6.QtWidgets import QApplication, QInputDialog, QMessageBox
 from app.dialogs.entry_dialog import EntryDialog
 from app.windows.main_window import MainWindow
 from config.settings import Settings
+from core.enums import Status
 from core.schemas import EntryCreate
 from core.services.entry_service import EntryService
 from core.services.sync_service import SyncService
@@ -100,3 +101,47 @@ def test_add_by_link_prefills_from_provider_result(
     assert len(entries) == 1
     assert entries[0].title == "From Provider"
     assert entries[0].description == "Synopsis"
+
+
+def _select_titles(window: MainWindow, *titles: str) -> None:
+    for row in range(window._list.count()):
+        item = window._list.item(row)
+        if any(item.text().startswith(title) for title in titles):
+            item.setSelected(True)
+
+
+def test_bulk_delete_removes_all_selected_entries(
+    service: EntryService, sync_service: SyncService, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    service.create(EntryCreate(title="A"))
+    service.create(EntryCreate(title="B"))
+    service.create(EntryCreate(title="C"))
+    window = _window(service, sync_service)
+    _select_titles(window, "A", "B")
+    monkeypatch.setattr(
+        QMessageBox, "question", lambda *a, **kw: QMessageBox.StandardButton.Yes
+    )
+
+    window._on_delete()
+
+    remaining = {e.title for e in service.list_all()}
+    assert remaining == {"C"}
+
+
+def test_bulk_status_change_applies_to_all_selected(
+    service: EntryService, sync_service: SyncService
+) -> None:
+    a = service.create(EntryCreate(title="A"))
+    b = service.create(EntryCreate(title="B"))
+    service.create(EntryCreate(title="C"))
+    window = _window(service, sync_service)
+    _select_titles(window, "A", "B")
+    idx = window._bulk_status_combo.findData(Status.COMPLETED)
+    window._bulk_status_combo.setCurrentIndex(idx)
+
+    window._on_bulk_status()
+
+    assert service.get(a.id).status == Status.COMPLETED  # type: ignore[union-attr]
+    assert service.get(b.id).status == Status.COMPLETED  # type: ignore[union-attr]
+    c = next(e for e in service.list_all() if e.title == "C")
+    assert c.status == Status.PLANNED

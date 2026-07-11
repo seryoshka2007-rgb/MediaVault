@@ -7,6 +7,7 @@ from __future__ import annotations
 import datetime as dt
 import logging
 import sqlite3
+from collections.abc import Sequence
 from pathlib import Path
 
 log = logging.getLogger(__name__)
@@ -45,6 +46,41 @@ class BackupService:
             today in p.name for p in self._backups_dir.glob("mediavault_*.db")
         ) if self._backups_dir.exists() else False
         return None if already else self.create(reason="daily")
+
+    def list_backups(self) -> Sequence[Path]:
+        """Newest first, so a browsing UI can show the most recent on top."""
+        if not self._backups_dir.exists():
+            return []
+        return sorted(
+            self._backups_dir.glob("mediavault_*.db"),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+
+    def restore(self, backup_path: Path) -> None:
+        """Restore the live database from a snapshot, via SQLite's backup API
+        (never a raw file copy - see CLAUDE.md). Takes a safety backup of the
+        current state first, since this is a "potentially dangerous
+        operation" per CLAUDE.md's rule.
+
+        Takes effect only after the app is restarted: this process's
+        already-open SQLAlchemy engine/connections keep referencing
+        pre-restore state otherwise.
+        """
+        if not backup_path.exists():
+            raise FileNotFoundError(backup_path)
+        self.create(reason="pre_restore")
+
+        source = sqlite3.connect(backup_path)
+        try:
+            target = sqlite3.connect(self._db_path)
+            try:
+                source.backup(target)
+            finally:
+                target.close()
+        finally:
+            source.close()
+        log.info("Restored database from backup: %s", backup_path.name)
 
     def _prune(self) -> None:
         backups = sorted(
