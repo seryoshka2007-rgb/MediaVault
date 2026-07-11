@@ -31,6 +31,10 @@ class PersonRepository:
         self._session.flush()
         return person
 
+    def list_all(self) -> Sequence[Person]:
+        stmt = select(Person).order_by(Person.created_at.asc())
+        return self._session.scalars(stmt).all()
+
 
 class DeviceRepository:
     def __init__(self, session: Session) -> None:
@@ -45,6 +49,17 @@ class DeviceRepository:
     def get_by_token(self, token: str) -> Device | None:
         stmt = select(Device).where(Device.token == token)
         return self._session.scalars(stmt).first()
+
+    def get(self, device_id: int) -> Device | None:
+        return self._session.get(Device, device_id)
+
+    def list_by_person(self, person_id: int) -> Sequence[Device]:
+        stmt = select(Device).where(Device.person_id == person_id).order_by(Device.created_at.asc())
+        return self._session.scalars(stmt).all()
+
+    def delete(self, device: Device) -> None:
+        self._session.delete(device)
+        self._session.flush()
 
 
 class TitleRepository:

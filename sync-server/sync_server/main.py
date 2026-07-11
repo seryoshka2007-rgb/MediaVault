@@ -23,13 +23,20 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sync_server.config import db_path
 from sync_server.database import init_db, make_engine, make_session_factory
 from sync_server.schemas import (
+    PersonSummary,
     PullResponse,
     PushRequest,
     PushResponse,
     RegisterRequest,
     RegisterResponse,
 )
-from sync_server.service import AuthenticatedDevice, SyncAuthError, SyncPermissionError, SyncService
+from sync_server.service import (
+    AuthenticatedDevice,
+    SyncAuthError,
+    SyncNotFoundError,
+    SyncPermissionError,
+    SyncService,
+)
 
 _bearer = HTTPBearer()
 
@@ -86,5 +93,28 @@ def create_app(service: SyncService | None = None) -> FastAPI:
         auth: Annotated[AuthenticatedDevice, Depends(get_auth)],
     ) -> PullResponse:
         return svc.pull(auth, since)
+
+    @app.get("/admin/people", response_model=list[PersonSummary])
+    def list_people(
+        svc: Annotated[SyncService, Depends(get_service)],
+        auth: Annotated[AuthenticatedDevice, Depends(get_auth)],
+    ) -> list[PersonSummary]:
+        try:
+            return svc.list_people(auth)
+        except SyncPermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+    @app.delete("/admin/devices/{device_id}", status_code=204)
+    def revoke_device(
+        device_id: int,
+        svc: Annotated[SyncService, Depends(get_service)],
+        auth: Annotated[AuthenticatedDevice, Depends(get_auth)],
+    ) -> None:
+        try:
+            svc.revoke_device(auth, device_id)
+        except SyncPermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except SyncNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     return app

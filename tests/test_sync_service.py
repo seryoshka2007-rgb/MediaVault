@@ -65,6 +65,80 @@ def test_register_device_network_error_raises_sync_error(
         sync_service.register_device("http://server:8000", "key", "Alice", "PC")
 
 
+def test_list_participants_returns_parsed_summaries(
+    sync_service: SyncService, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    payload = [
+        {
+            "person_id": 1,
+            "name": "Owner",
+            "role": "admin",
+            "created_at": "2026-01-01T00:00:00",
+            "devices": [
+                {"device_id": 1, "label": "Desktop", "created_at": "2026-01-01T00:00:00"}
+            ],
+        }
+    ]
+    captured: dict[str, Any] = {}
+
+    def fake_get(url: str, headers: dict[str, str], timeout: int) -> _FakeResponse:
+        captured["url"] = url
+        captured["headers"] = headers
+        return _FakeResponse(payload)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(requests, "get", fake_get)
+
+    participants = sync_service.list_participants("http://server:8000", "admin-tok")
+
+    assert captured["url"] == "http://server:8000/admin/people"
+    assert captured["headers"]["Authorization"] == "Bearer admin-tok"
+    assert len(participants) == 1
+    assert participants[0].name == "Owner"
+    assert participants[0].devices[0].label == "Desktop"
+
+
+def test_list_participants_forbidden_raises_sync_error(
+    sync_service: SyncService, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def fake_get(*a: Any, **kw: Any) -> _FakeResponse:  # noqa: ANN401
+        return _FakeResponse({"detail": "requires admin role"}, status_code=403)
+
+    monkeypatch.setattr(requests, "get", fake_get)
+
+    with pytest.raises(SyncError):
+        sync_service.list_participants("http://server:8000", "participant-tok")
+
+
+def test_revoke_device_sends_delete_with_auth(
+    sync_service: SyncService, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured: dict[str, Any] = {}
+
+    def fake_delete(url: str, headers: dict[str, str], timeout: int) -> _FakeResponse:
+        captured["url"] = url
+        captured["headers"] = headers
+        return _FakeResponse({}, status_code=204)
+
+    monkeypatch.setattr(requests, "delete", fake_delete)
+
+    sync_service.revoke_device("http://server:8000", "admin-tok", 42)
+
+    assert captured["url"] == "http://server:8000/admin/devices/42"
+    assert captured["headers"]["Authorization"] == "Bearer admin-tok"
+
+
+def test_revoke_device_network_error_raises_sync_error(
+    sync_service: SyncService, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def fake_delete(*a: Any, **kw: Any) -> _FakeResponse:  # noqa: ANN401
+        raise requests.exceptions.ConnectionError("refused")
+
+    monkeypatch.setattr(requests, "delete", fake_delete)
+
+    with pytest.raises(SyncError):
+        sync_service.revoke_device("http://server:8000", "admin-tok", 42)
+
+
 def test_push_sends_title_and_state_for_new_entry(
     service: EntryService, sync_service: SyncService, monkeypatch: pytest.MonkeyPatch
 ) -> None:

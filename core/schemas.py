@@ -128,3 +128,27 @@ class SyncResult(BaseModel):
     pushed: int
     pulled: int
     synced_at: dt.datetime
+
+
+class DeviceSummary(BaseModel):
+    """One paired device, as shown in the admin participants dialog."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    device_id: int
+    label: str
+    created_at: dt.datetime
+
+
+class ParticipantSummary(BaseModel):
+    """One person registered on the sync server (possibly several devices),
+    as shown to the admin in the participants dialog - who's on the server,
+    and which of their devices can be revoked."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    person_id: int
+    name: str
+    role: str
+    created_at: dt.datetime
+    devices: list[DeviceSummary] = Field(default_factory=list)

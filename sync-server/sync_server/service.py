@@ -23,6 +23,8 @@ from sync_server.repository import (
     UserStateRepository,
 )
 from sync_server.schemas import (
+    DeviceSummary,
+    PersonSummary,
     PullResponse,
     PushResult,
     RegisterResponse,
@@ -53,6 +55,10 @@ class SyncAuthError(Exception):
 
 class SyncPermissionError(Exception):
     """Authenticated, but not allowed to do this (e.g. reusing the admin's name)."""
+
+
+class SyncNotFoundError(Exception):
+    """Referenced a device/person that doesn't exist."""
 
 
 @dataclass(frozen=True)
@@ -162,6 +168,44 @@ class SyncService:
 
             session.commit()
         return title_results, state_results
+
+    def list_people(self, auth: AuthenticatedDevice) -> list[PersonSummary]:
+        """Admin-only directory of who's registered and their devices, so the
+        server owner can see participants and revoke a token if needed."""
+        if auth.role != ADMIN_ROLE:
+            raise SyncPermissionError("requires admin role")
+        with self._session_factory() as session:
+            people_repo = PersonRepository(session)
+            device_repo = DeviceRepository(session)
+            summaries = []
+            for person in people_repo.list_all():
+                devices = device_repo.list_by_person(person.id)
+                summaries.append(
+                    PersonSummary(
+                        person_id=person.id,
+                        name=person.name,
+                        role=person.role,
+                        created_at=person.created_at,
+                        devices=[DeviceSummary.model_validate(d) for d in devices],
+                    )
+                )
+            return summaries
+
+    def revoke_device(self, auth: AuthenticatedDevice, device_id: int) -> None:
+        """Invalidate a device's token immediately - it simply stops
+        authenticating on its next request. Admin-only; a device can't
+        revoke itself (avoids an admin accidentally locking themself out)."""
+        if auth.role != ADMIN_ROLE:
+            raise SyncPermissionError("requires admin role")
+        if device_id == auth.device_id:
+            raise SyncPermissionError("cannot revoke the device you're using right now")
+        with self._session_factory() as session:
+            device_repo = DeviceRepository(session)
+            device = device_repo.get(device_id)
+            if device is None:
+                raise SyncNotFoundError(f"no such device: {device_id}")
+            device_repo.delete(device)
+            session.commit()
 
     def pull(self, auth: AuthenticatedDevice, since: dt.datetime) -> PullResponse:
         since_naive = _naive_utc(since)

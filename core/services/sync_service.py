@@ -16,7 +16,7 @@ import requests
 from sqlalchemy.orm import Session, sessionmaker
 
 from core.repositories.entry_repository import EntryRepository
-from core.schemas import SyncResult, TitleSyncData, UserStateSyncData
+from core.schemas import ParticipantSummary, SyncResult, TitleSyncData, UserStateSyncData
 
 log = logging.getLogger(__name__)
 
@@ -74,6 +74,33 @@ class SyncService:
         assert isinstance(token, str)
         assert isinstance(role, str)
         return token, role
+
+    def list_participants(self, server_url: str, token: str) -> list[ParticipantSummary]:
+        """Admin-only: who's registered on the server and their devices."""
+        try:
+            resp = requests.get(
+                f"{server_url.rstrip('/')}/admin/people",
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=10,
+            )
+            resp.raise_for_status()
+        except requests.exceptions.RequestException as exc:
+            raise SyncError(
+                f"Не удалось получить список участников: {_error_detail(exc)}"
+            ) from exc
+        return [ParticipantSummary.model_validate(item) for item in resp.json()]
+
+    def revoke_device(self, server_url: str, token: str, device_id: int) -> None:
+        """Admin-only: invalidate someone's device token immediately."""
+        try:
+            resp = requests.delete(
+                f"{server_url.rstrip('/')}/admin/devices/{device_id}",
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=10,
+            )
+            resp.raise_for_status()
+        except requests.exceptions.RequestException as exc:
+            raise SyncError(f"Не удалось отозвать токен: {_error_detail(exc)}") from exc
 
     def sync_now(
         self, server_url: str, device_token: str, role: str, since: dt.datetime | None

@@ -21,6 +21,8 @@ from PySide6.QtWidgets import (
 )
 
 from app.dialogs.entry_dialog import EntryDialog
+from app.dialogs.participants_dialog import ParticipantsDialog
+from app.workers.sync_worker import SyncWorker
 from config.settings import Settings, save_settings
 from core.enums import (
     ENTRY_TYPE_LABELS_RU,
@@ -30,7 +32,7 @@ from core.enums import (
     SortOption,
     Status,
 )
-from core.schemas import EntryRead
+from core.schemas import EntryRead, SyncResult
 from core.services.entry_service import EntryService
 from core.services.sync_service import SyncError, SyncService
 from core.validators.url_validator import is_valid_url
@@ -46,6 +48,7 @@ class MainWindow(QMainWindow):
         self._service = entry_service
         self._sync_service = sync_service
         self._settings = settings
+        self._sync_worker: SyncWorker | None = None
         self.setWindowTitle("MediaVault")
         self.resize(900, 600)
         self._build_ui()
@@ -66,14 +69,18 @@ class MainWindow(QMainWindow):
         edit_btn.clicked.connect(self._on_edit)
         delete_btn = QPushButton("Удалить")
         delete_btn.clicked.connect(self._on_delete)
-        sync_btn = QPushButton("Синхронизировать")
-        sync_btn.clicked.connect(self._on_sync)
+        self._sync_btn = QPushButton("Синхронизировать")
+        self._sync_btn.clicked.connect(self._on_sync)
+        self._participants_btn = QPushButton("Участники")
+        self._participants_btn.clicked.connect(self._on_participants)
+        self._participants_btn.setVisible(self._settings.sync_role == "admin")
         top.addWidget(self._search)
         top.addWidget(add_btn)
         top.addWidget(watch_btn)
         top.addWidget(edit_btn)
         top.addWidget(delete_btn)
-        top.addWidget(sync_btn)
+        top.addWidget(self._sync_btn)
+        top.addWidget(self._participants_btn)
 
         filters = QHBoxLayout()
         self._type_filter = QComboBox()
@@ -243,6 +250,7 @@ class MainWindow(QMainWindow):
         needs_setup = not self._settings.sync_server_url or not self._settings.sync_device_token
         if needs_setup and not self._configure_sync():
             return
+        self._participants_btn.setVisible(self._settings.sync_role == "admin")
 
         since = None
         if self._settings.sync_last_synced_at:
@@ -251,17 +259,24 @@ class MainWindow(QMainWindow):
         assert self._settings.sync_server_url is not None
         assert self._settings.sync_device_token is not None
         assert self._settings.sync_role is not None
-        try:
-            result = self._sync_service.sync_now(
-                self._settings.sync_server_url,
-                self._settings.sync_device_token,
-                self._settings.sync_role,
-                since,
-            )
-        except SyncError as exc:
-            QMessageBox.warning(self, "Ошибка синхронизации", str(exc))
-            return
 
+        self._sync_btn.setEnabled(False)
+        self._sync_btn.setText("Синхронизация…")
+        worker = SyncWorker(
+            self._sync_service,
+            self._settings.sync_server_url,
+            self._settings.sync_device_token,
+            self._settings.sync_role,
+            since,
+            self,
+        )
+        worker.succeeded.connect(self._on_sync_succeeded)
+        worker.failed.connect(self._on_sync_failed)
+        worker.finished.connect(self._on_sync_finished)
+        self._sync_worker = worker
+        worker.start()
+
+    def _on_sync_succeeded(self, result: SyncResult) -> None:
         self._settings.sync_last_synced_at = result.synced_at.isoformat()
         save_settings(self._settings)
         QMessageBox.information(
@@ -270,6 +285,23 @@ class MainWindow(QMainWindow):
             f"Отправлено: {result.pushed}\nПолучено: {result.pulled}",
         )
         self._reload()
+
+    def _on_sync_failed(self, message: str) -> None:
+        QMessageBox.warning(self, "Ошибка синхронизации", message)
+
+    def _on_sync_finished(self) -> None:
+        self._sync_btn.setEnabled(True)
+        self._sync_btn.setText("Синхронизировать")
+        self._sync_worker = None
+
+    def _on_participants(self) -> None:
+        assert self._settings.sync_server_url is not None
+        assert self._settings.sync_device_token is not None
+        dialog = ParticipantsDialog(
+            self, self._sync_service, self._settings.sync_server_url,
+            self._settings.sync_device_token,
+        )
+        dialog.exec()
 
     def _render(self, entries: list[EntryRead]) -> None:
         self._list.clear()
